@@ -11,6 +11,8 @@ A simple Windows GUI wrapper for **dump2ufs**. This tool simplifies the process 
 - **Optimization**: Tests multiple block sizes to ensure the smallest possible file size (just like the original script).
 - **Windows Only**: Built specifically for Windows users.
 
+> ⚠️ **This tool only accepts extracted (foldered) PS5 game dumps.** Compressed archives (`.rar`, `.zip`, `.7z`, etc.) are **not** supported — please extract your dump first.
+
 ## Usage
 
 1. **Download** the latest release.
