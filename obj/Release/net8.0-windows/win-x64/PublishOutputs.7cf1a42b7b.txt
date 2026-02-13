@@ -1,0 +1,2 @@
+C:\Users\JDRos\Documents\VSCodeProjects\dump2ufs-gui\bin\Release\net8.0-windows\win-x64\publish\dump2ufs-gui.pdb
+C:\Users\JDRos\Documents\VSCodeProjects\dump2ufs-gui\bin\Release\net8.0-windows\win-x64\publish\dump2ufs-gui.exe

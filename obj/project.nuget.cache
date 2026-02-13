@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "DSoVOYv2E5I=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\JDRos\\Documents\\VSCodeProjects\\dump2ufs-gui\\dump2ufs-gui.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\JDRos\\.nuget\\packages\\microsoft.net.illink.tasks\\8.0.24\\microsoft.net.illink.tasks.8.0.24.nupkg.sha512",
+    "C:\\Users\\JDRos\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.24\\microsoft.netcore.app.runtime.win-x64.8.0.24.nupkg.sha512",
+    "C:\\Users\\JDRos\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.24\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.24.nupkg.sha512",
+    "C:\\Users\\JDRos\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.24\\microsoft.aspnetcore.app.runtime.win-x64.8.0.24.nupkg.sha512"
+  ],
+  "logs": []
+}
