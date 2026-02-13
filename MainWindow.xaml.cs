@@ -1,6 +1,7 @@
 using System;
+using System.Collections.ObjectModel;
 using System.IO;
-using System.Runtime.InteropServices;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -8,7 +9,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Forms;
-using System.Windows.Interop;
+using Dump2UfsGui.Models;
 using Dump2UfsGui.Services;
 using MessageBox = System.Windows.MessageBox;
 
@@ -16,60 +17,165 @@ namespace Dump2UfsGui
 {
     public partial class MainWindow : Window
     {
-        // Win32 interop to hide title bar icon
-        [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
-        [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
-        [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr hwndInsertAfter, int x, int y, int cx, int cy, uint flags);
-        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
-
-        private const int GWL_EXSTYLE = -20;
-        private const int WS_EX_DLGMODALFRAME = 0x0001;
-        private const uint SWP_NOSIZE = 0x0001;
-        private const uint SWP_NOMOVE = 0x0002;
-        private const uint SWP_NOZORDER = 0x0004;
-        private const uint SWP_FRAMECHANGED = 0x0020;
-        private const uint WM_SETICON = 0x0080;
-
         private SettingsData _settings = new();
-        private GameInfo? _gameInfo;
         private string? _ufs2ToolPath;
         private CancellationTokenSource? _cts;
-        private bool _isConverting;
+        private bool _isProcessingQueue;
+
+        // Smart log dedup
+        private string _lastLogPrefix = "";
+        private int _lastLogLineStart = -1;
+
+        // Queue
+        private readonly ObservableCollection<QueueItem> _queue = new();
+
+        // Drag-reorder state
+        private Point _dragStartPoint;
+        private QueueItem? _draggedItem;
 
         public MainWindow()
         {
             InitializeComponent();
-            SourceInitialized += MainWindow_SourceInitialized;
+            QueueListBox.ItemsSource = _queue;
+            _queue.CollectionChanged += (_, __) => UpdateQueueUI();
         }
 
-        private void MainWindow_SourceInitialized(object? sender, EventArgs e)
-        {
-            // Remove icon from title bar but keep it in taskbar
-            var hwnd = new WindowInteropHelper(this).Handle;
-            int extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-            SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_DLGMODALFRAME);
-            SendMessage(hwnd, WM_SETICON, IntPtr.Zero, IntPtr.Zero); // clear small icon (title bar only)
-            SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-        }
+        // Custom title bar buttons
+        private void BtnMinimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+        private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
 
-        private async void Window_Loaded(object sender, RoutedEventArgs e)
+        private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             _settings = SettingsManager.Load();
             _ufs2ToolPath = SettingsManager.FindUfs2Tool(_settings);
 
             if (_ufs2ToolPath != null)
             {
-                UpdateToolVersionDisplay();
+                // Path found
             }
             else
             {
                 // Show setup overlay
                 OverlaySetup.Visibility = Visibility.Visible;
             }
+
+            // Pre-fill output dir from settings
+            if (!string.IsNullOrEmpty(_settings.LastOutputDir) && Directory.Exists(_settings.LastOutputDir))
+            {
+                TxtOutputDir.Text = _settings.LastOutputDir;
+            }
+
         }
 
         // ═══════════════════════════════════════════
-        // INPUT
+        // QUEUE MANAGEMENT
+        // ═══════════════════════════════════════════
+
+        private void AddToQueue(string folderPath)
+        {
+            // Check for duplicates (case-insensitive path comparison)
+            var normalizedPath = Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            foreach (var existing in _queue)
+            {
+                var existingNormalized = Path.GetFullPath(existing.InputPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.Equals(normalizedPath, existingNormalized, StringComparison.OrdinalIgnoreCase))
+                {
+                    AppendLog($"⚠ Skipped duplicate: {Path.GetFileName(folderPath)}");
+                    return;
+                }
+            }
+
+            // Validate it's a game dump
+            if (!GameDumpValidator.IsValidDump(folderPath))
+            {
+                AppendLog($"⚠ Not a valid PS5 dump: {Path.GetFileName(folderPath)} (missing sce_sys/param.json)");
+                return;
+            }
+
+            try
+            {
+                var gameInfo = GameDumpValidator.ParseGameInfo(folderPath);
+
+                // Auto-generate output path
+                var outputDir = !string.IsNullOrWhiteSpace(TxtOutputDir.Text)
+                    ? TxtOutputDir.Text
+                    : Path.GetDirectoryName(folderPath) ?? folderPath;
+
+                var outputPath = Path.Combine(outputDir, gameInfo.SuggestedOutputName);
+
+                var item = new QueueItem
+                {
+                    InputPath = folderPath,
+                    OutputPath = outputPath,
+                    GameInfo = gameInfo,
+                    StatusText = "Waiting"
+                };
+
+                _queue.Add(item);
+                AppendLog($"Added to queue: {gameInfo.TitleName} ({gameInfo.TitleId})");
+
+                // Auto-fill output dir if empty
+                if (string.IsNullOrWhiteSpace(TxtOutputDir.Text))
+                {
+                    TxtOutputDir.Text = outputDir;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"⚠ Error parsing {Path.GetFileName(folderPath)}: {ex.Message}");
+            }
+        }
+
+        private void UpdateQueueUI()
+        {
+            var waitingCount = _queue.Count(q => q.Status == QueueItemStatus.Waiting);
+            var totalCount = _queue.Count;
+            var doneCount = _queue.Count(q => q.Status == QueueItemStatus.Done);
+
+            if (_isProcessingQueue)
+            {
+                TxtQueueCount.Text = $"({doneCount}/{totalCount} done)";
+            }
+            else if (totalCount > 0)
+            {
+                TxtQueueCount.Text = $"({totalCount} game{(totalCount == 1 ? "" : "s")})";
+            }
+            else
+            {
+                TxtQueueCount.Text = "";
+            }
+
+            BtnConvert.IsEnabled = waitingCount > 0 && _ufs2ToolPath != null && !_isProcessingQueue;
+            TxtConvertButton.Text = waitingCount > 1
+                ? $"Convert {waitingCount} Games to .ffpkg"
+                : "Convert to .ffpkg";
+        }
+
+        private void BtnRemoveQueueItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button btn && btn.Tag is QueueItem item)
+            {
+                if (item.Status == QueueItemStatus.Waiting)
+                {
+                    _queue.Remove(item);
+                    AppendLog($"Removed from queue: {item.GameInfo.TitleName}");
+                }
+            }
+        }
+
+        private void BtnClearQueue_Click(object sender, RoutedEventArgs e)
+        {
+            // Remove all items that are not currently processing
+            var removable = _queue.Where(q => q.Status != QueueItemStatus.Processing).ToList();
+            foreach (var item in removable)
+            {
+                _queue.Remove(item);
+            }
+            AppendLog($"Cleared {removable.Count} item(s) from queue.");
+        }
+
+        // ═══════════════════════════════════════════
+        // DRAG & DROP — ADD TO QUEUE
         // ═══════════════════════════════════════════
 
         private void BtnBrowseInput_Click(object sender, RoutedEventArgs e)
@@ -86,18 +192,17 @@ namespace Dump2UfsGui
 
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                SetInputPath(dialog.SelectedPath);
+                _settings.LastInputDir = Path.GetDirectoryName(dialog.SelectedPath);
+                AddToQueue(dialog.SelectedPath);
             }
         }
-
-        // ─── DROP ZONE HANDLERS ───
 
         private void DropZone_DragOver(object sender, System.Windows.DragEventArgs e)
         {
             if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
             {
                 var paths = (string[])e.Data.GetData(System.Windows.DataFormats.FileDrop)!;
-                if (paths.Length > 0 && Directory.Exists(paths[0]))
+                if (paths.Any(p => Directory.Exists(p)))
                 {
                     e.Effects = System.Windows.DragDropEffects.Copy;
                     SetDropZoneActive(true);
@@ -105,7 +210,6 @@ namespace Dump2UfsGui
                     return;
                 }
             }
-            // Reject non-folder drops
             e.Effects = System.Windows.DragDropEffects.None;
             e.Handled = true;
         }
@@ -122,30 +226,26 @@ namespace Dump2UfsGui
             if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
             {
                 var paths = (string[])e.Data.GetData(System.Windows.DataFormats.FileDrop)!;
-                if (paths.Length > 0 && Directory.Exists(paths[0]))
+                int added = 0;
+                foreach (var path in paths)
                 {
-                    SetInputPath(paths[0]);
+                    if (Directory.Exists(path))
+                    {
+                        var countBefore = _queue.Count;
+                        AddToQueue(path);
+                        if (_queue.Count > countBefore) added++;
+                    }
+                }
+                if (added > 0)
+                {
+                    TxtStatus.Text = $"Added {added} game{(added == 1 ? "" : "s")} to queue";
                 }
             }
         }
 
         private void DropZone_MouseClick(object sender, MouseButtonEventArgs e)
         {
-            // Clicking the drop zone opens the folder browser
             BtnBrowseInput_Click(sender, new RoutedEventArgs());
-        }
-
-        private void BtnClearInput_Click(object sender, RoutedEventArgs e)
-        {
-            TxtInputPath.Text = "";
-            _gameInfo = null;
-            BtnConvert.IsEnabled = false;
-            PanelGameInfo.Visibility = Visibility.Collapsed;
-            PanelInputError.Visibility = Visibility.Collapsed;
-            PanelSelectedPath.Visibility = Visibility.Collapsed;
-            DropZoneBorder.Visibility = Visibility.Visible;
-            TxtStatus.Text = "Ready — select a PS5 game dump folder to begin";
-            TxtOutputPath.Text = "";
         }
 
         private void SetDropZoneActive(bool active)
@@ -155,10 +255,9 @@ namespace Dump2UfsGui
                 DropZoneBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#7B2FFF");
                 DropZoneBgBrush.Color = (Color)ColorConverter.ConvertFromString("#120D25");
                 DropZoneHighlight.Visibility = Visibility.Visible;
-                DropZoneText.Text = "Drop your folder here!";
+                DropZoneText.Text = "Drop your folder(s) here!";
                 DropZoneText.Foreground = FindResource("AccentPurpleBrush") as SolidColorBrush;
 
-                // Scale up the icon
                 var scaleUp = new DoubleAnimation(1.2, TimeSpan.FromMilliseconds(150))
                 { EasingFunction = new QuadraticEase() };
                 DropZoneIconScale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleUp);
@@ -169,10 +268,9 @@ namespace Dump2UfsGui
                 DropZoneBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#353560");
                 DropZoneBgBrush.Color = (Color)ColorConverter.ConvertFromString("#0A0A1A");
                 DropZoneHighlight.Visibility = Visibility.Collapsed;
-                DropZoneText.Text = "Drag & drop a PS5 game dump folder here";
+                DropZoneText.Text = "Drag & drop PS5 game dump folders here to add to queue";
                 DropZoneText.Foreground = FindResource("TextSecondaryBrush") as SolidColorBrush;
 
-                // Scale back icon
                 var scaleDown = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(150))
                 { EasingFunction = new QuadraticEase() };
                 DropZoneIconScale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleDown);
@@ -180,56 +278,102 @@ namespace Dump2UfsGui
             }
         }
 
-        private void SetInputPath(string path)
+        // ═══════════════════════════════════════════
+        // DRAG REORDER — QUEUE LIST
+        // ═══════════════════════════════════════════
+
+        private void QueueList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            TxtInputPath.Text = path;
-            PanelGameInfo.Visibility = Visibility.Collapsed;
-            PanelInputError.Visibility = Visibility.Collapsed;
+            _dragStartPoint = e.GetPosition(null);
+        }
 
-            // Show selected path panel, hide the drop zone
-            DropZoneBorder.Visibility = Visibility.Collapsed;
-            PanelSelectedPath.Visibility = Visibility.Visible;
+        private void QueueList_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            if (e.LeftButton != MouseButtonState.Pressed) return;
 
-            _settings.LastInputDir = Path.GetDirectoryName(path);
+            var currentPos = e.GetPosition(null);
+            var diff = _dragStartPoint - currentPos;
 
-            try
+            if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
+                Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
             {
-                if (!GameDumpValidator.IsValidDump(path))
-                {
-                    ShowInputError("This folder does not contain sce_sys/param.json. Make sure you selected a valid PS5 game dump folder.");
-                    BtnConvert.IsEnabled = false;
-                    return;
-                }
+                // Find the item being dragged
+                var listBoxItem = FindVisualParent<System.Windows.Controls.ListBoxItem>(
+                    (DependencyObject)e.OriginalSource);
 
-                _gameInfo = GameDumpValidator.ParseGameInfo(path);
-                TxtGameTitle.Text = _gameInfo.TitleName;
-                TxtGameId.Text = _gameInfo.TitleId;
-                TxtLabel.Text = _gameInfo.AutoLabel;
-                PanelGameInfo.Visibility = Visibility.Visible;
+                if (listBoxItem == null) return;
 
-                // Auto-fill output path (same parent dir)
-                var parentDir = Path.GetDirectoryName(path) ?? path;
-                var outputPath = Path.Combine(parentDir, _gameInfo.SuggestedOutputName);
-                TxtOutputPath.Text = outputPath;
+                var item = (QueueItem)QueueListBox.ItemContainerGenerator.ItemFromContainer(listBoxItem);
 
-                BtnConvert.IsEnabled = _ufs2ToolPath != null;
-                TxtStatus.Text = $"Ready — {_gameInfo.TitleName} ({_gameInfo.TitleId})";
+                // Only allow dragging waiting items
+                if (item == null || item.Status != QueueItemStatus.Waiting) return;
 
-                AppendLog($"Detected game: {_gameInfo.TitleName} (ID: {_gameInfo.TitleId})");
-                AppendLog($"Auto-label: {_gameInfo.AutoLabel}");
-                AppendLog($"Output: {outputPath}");
-            }
-            catch (Exception ex)
-            {
-                ShowInputError(ex.Message);
-                BtnConvert.IsEnabled = false;
+                _draggedItem = item;
+
+                var data = new System.Windows.DataObject("QueueItem", item);
+                DragDrop.DoDragDrop(listBoxItem, data, System.Windows.DragDropEffects.Move);
+                _draggedItem = null;
             }
         }
 
-        private void ShowInputError(string message)
+        private void QueueList_DragOver(object sender, System.Windows.DragEventArgs e)
         {
-            TxtInputError.Text = $"⚠ {message}";
-            PanelInputError.Visibility = Visibility.Visible;
+            if (!e.Data.GetDataPresent("QueueItem"))
+            {
+                e.Effects = System.Windows.DragDropEffects.None;
+                e.Handled = true;
+                return;
+            }
+            e.Effects = System.Windows.DragDropEffects.Move;
+            e.Handled = true;
+        }
+
+        private void QueueList_Drop(object sender, System.Windows.DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent("QueueItem")) return;
+
+            var droppedData = (QueueItem)e.Data.GetData("QueueItem")!;
+            var targetItem = FindQueueItemAtPosition(e.GetPosition(QueueListBox));
+
+            if (targetItem == null || droppedData == targetItem) return;
+
+            // Only allow reorder among waiting items, and target must be a waiting slot
+            if (droppedData.Status != QueueItemStatus.Waiting) return;
+
+            int oldIndex = _queue.IndexOf(droppedData);
+            int newIndex = _queue.IndexOf(targetItem);
+
+            // Find the valid range boundaries (can only move within waiting items)
+            // Items that are done/processing are at the top, waiting items below
+            if (oldIndex >= 0 && newIndex >= 0 && oldIndex != newIndex)
+            {
+                // Only allow placing among other waiting items
+                if (targetItem.Status != QueueItemStatus.Waiting) return;
+
+                _queue.Move(oldIndex, newIndex);
+            }
+        }
+
+        private QueueItem? FindQueueItemAtPosition(Point position)
+        {
+            var element = QueueListBox.InputHitTest(position) as DependencyObject;
+            if (element == null) return null;
+
+            var listBoxItem = FindVisualParent<System.Windows.Controls.ListBoxItem>(element);
+            if (listBoxItem == null) return null;
+
+            return QueueListBox.ItemContainerGenerator.ItemFromContainer(listBoxItem) as QueueItem;
+        }
+
+        private static T? FindVisualParent<T>(DependencyObject child) where T : DependencyObject
+        {
+            while (child != null)
+            {
+                if (child is T parent)
+                    return parent;
+                child = VisualTreeHelper.GetParent(child);
+            }
+            return null;
         }
 
         // ═══════════════════════════════════════════
@@ -238,137 +382,210 @@ namespace Dump2UfsGui
 
         private void BtnBrowseOutput_Click(object sender, RoutedEventArgs e)
         {
-            using var dialog = new SaveFileDialog
+            using var dialog = new FolderBrowserDialog
             {
-                Title = "Save .ffpkg File",
-                Filter = "FFPkg Files (*.ffpkg)|*.ffpkg|All Files (*.*)|*.*",
-                DefaultExt = "ffpkg"
+                Description = "Select Output Directory for .ffpkg Files",
+                UseDescriptionForTitle = true
             };
 
-            if (_gameInfo != null)
-                dialog.FileName = _gameInfo.SuggestedOutputName;
-
-            if (!string.IsNullOrEmpty(TxtOutputPath.Text))
-            {
-                var dir = Path.GetDirectoryName(TxtOutputPath.Text);
-                if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
-                    dialog.InitialDirectory = dir;
-            }
+            if (!string.IsNullOrEmpty(TxtOutputDir.Text) && Directory.Exists(TxtOutputDir.Text))
+                dialog.InitialDirectory = TxtOutputDir.Text;
             else if (!string.IsNullOrEmpty(_settings.LastOutputDir) && Directory.Exists(_settings.LastOutputDir))
-            {
                 dialog.InitialDirectory = _settings.LastOutputDir;
-            }
 
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                TxtOutputPath.Text = dialog.FileName;
-                _settings.LastOutputDir = Path.GetDirectoryName(dialog.FileName);
+                TxtOutputDir.Text = dialog.SelectedPath;
+                _settings.LastOutputDir = dialog.SelectedPath;
+
+                // Update output paths for all waiting items
+                foreach (var item in _queue.Where(q => q.Status == QueueItemStatus.Waiting))
+                {
+                    item.OutputPath = Path.Combine(dialog.SelectedPath, item.GameInfo.SuggestedOutputName);
+                }
             }
         }
 
         // ═══════════════════════════════════════════
-        // CONVERT
+        // BATCH CONVERSION
         // ═══════════════════════════════════════════
 
         private async void BtnConvert_Click(object sender, RoutedEventArgs e)
         {
-            if (_isConverting || _ufs2ToolPath == null || _gameInfo == null) return;
+            if (_isProcessingQueue || _ufs2ToolPath == null) return;
 
-            var inputPath = TxtInputPath.Text;
-            var outputPath = TxtOutputPath.Text;
+            var waitingItems = _queue.Where(q => q.Status == QueueItemStatus.Waiting).ToList();
+            if (waitingItems.Count == 0) return;
 
-            if (string.IsNullOrWhiteSpace(inputPath) || string.IsNullOrWhiteSpace(outputPath))
+            // Validate output directory
+            var outputDir = TxtOutputDir.Text;
+            if (string.IsNullOrWhiteSpace(outputDir))
             {
-                MessageBox.Show("Please specify both input folder and output file path.", "Missing Info",
+                MessageBox.Show("Please specify an output directory.", "Missing Info",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            if (File.Exists(outputPath))
+            if (!Directory.Exists(outputDir))
             {
+                try { Directory.CreateDirectory(outputDir); }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Cannot create output directory:\n{ex.Message}", "Error",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+            }
+
+            // Update output paths to use current output dir
+            foreach (var item in waitingItems)
+            {
+                item.OutputPath = Path.Combine(outputDir, item.GameInfo.SuggestedOutputName);
+            }
+
+            // Check for existing files
+            var existing = waitingItems.Where(i => File.Exists(i.OutputPath)).ToList();
+            if (existing.Count > 0)
+            {
+                var names = string.Join("\n", existing.Select(i => Path.GetFileName(i.OutputPath)));
                 var result = MessageBox.Show(
-                    $"The file already exists:\n{outputPath}\n\nOverwrite?",
-                    "File Exists", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    $"The following files already exist and will be overwritten:\n\n{names}\n\nContinue?",
+                    "Files Exist", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 if (result != MessageBoxResult.Yes) return;
             }
 
-            _isConverting = true;
+            _isProcessingQueue = true;
             _cts = new CancellationTokenSource();
             SetConvertingState(true);
+            PanelLog.Visibility = Visibility.Visible;
+            LogColumn.Width = new GridLength(1, GridUnitType.Star);
+
+            int completed = 0, failed = 0;
 
             try
             {
-                var converter = new Ufs2Converter(_ufs2ToolPath);
-
-                converter.OnProgress += p =>
+                // Process each waiting item one by one
+                // Re-query waiting items each iteration in case user removed items during processing
+                while (true)
                 {
-                    Dispatcher.Invoke(() =>
-                    {
-                        TxtProgressStage.Text = p.Stage;
-                        TxtProgressDetail.Text = p.Detail;
-                        TxtProgressPercent.Text = $"{p.PercentComplete}%";
-                        ProgressBar.Value = p.PercentComplete;
-                        TxtStatus.Text = $"{p.Stage}: {p.Detail}";
+                    var nextItem = _queue.FirstOrDefault(q => q.Status == QueueItemStatus.Waiting);
+                    if (nextItem == null) break;
 
-                        if (p.IsError)
+                    if (_cts.Token.IsCancellationRequested) break;
+
+                    // Update output path in case output dir changed
+                    nextItem.OutputPath = Path.Combine(TxtOutputDir.Text, nextItem.GameInfo.SuggestedOutputName);
+
+                    nextItem.Status = QueueItemStatus.Processing;
+                    nextItem.StatusText = "Optimizing block sizes...";
+                    nextItem.Progress = 0;
+
+                    TxtStatus.Text = $"Converting {nextItem.GameInfo.TitleName}... ({completed + 1}/{completed + _queue.Count(q => q.Status == QueueItemStatus.Waiting) + 1})";
+                    AppendLog($"\n=== Converting: {nextItem.GameInfo.TitleName} ({nextItem.GameInfo.TitleId}) ===");
+
+                    try
+                    {
+                        var converter = new Ufs2Converter(_ufs2ToolPath);
+
+                        converter.OnProgress += p =>
                         {
-                            TxtProgressStage.Foreground = FindResource("AccentRedBrush") as System.Windows.Media.SolidColorBrush;
+                            Dispatcher.Invoke(() =>
+                            {
+                                nextItem.Progress = p.PercentComplete;
+                                nextItem.StatusText = $"{p.Stage}: {p.Detail}";
+                            });
+                        };
+
+                        converter.OnLog += msg =>
+                        {
+                            Dispatcher.Invoke(() => AppendLog(msg));
+                        };
+
+                        var convResult = await Task.Run(
+                            () => converter.ConvertAsync(nextItem.InputPath, nextItem.OutputPath, nextItem.GameInfo.AutoLabel, _cts.Token));
+
+                        if (convResult.Success)
+                        {
+                            nextItem.Status = QueueItemStatus.Done;
+                            nextItem.Progress = 100;
+                            nextItem.StatusText = $"✅ Done — {Ufs2Converter.FormatSize(convResult.FileSize)}";
+                            completed++;
+                            AppendLog($"✅ {nextItem.GameInfo.TitleName} completed: {Ufs2Converter.FormatSize(convResult.FileSize)}");
+                        }
+                        else if (convResult.ErrorMessage == "Conversion was cancelled.")
+                        {
+                            nextItem.Status = QueueItemStatus.Cancelled;
+                            nextItem.StatusText = "Cancelled";
+
+                            // Mark remaining waiting items as cancelled too
+                            foreach (var remaining in _queue.Where(q => q.Status == QueueItemStatus.Waiting))
+                            {
+                                remaining.Status = QueueItemStatus.Cancelled;
+                                remaining.StatusText = "Cancelled";
+                            }
+                            break;
                         }
                         else
                         {
-                            TxtProgressStage.Foreground = FindResource("AccentBlueBrush") as System.Windows.Media.SolidColorBrush;
+                            nextItem.Status = QueueItemStatus.Error;
+                            nextItem.StatusText = $"❌ {convResult.ErrorMessage}";
+                            failed++;
+                            AppendLog($"❌ {nextItem.GameInfo.TitleName} failed: {convResult.ErrorMessage}");
                         }
-                    });
-                };
+                    }
+                    catch (Exception ex)
+                    {
+                        nextItem.Status = QueueItemStatus.Error;
+                        nextItem.StatusText = $"❌ {ex.Message}";
+                        failed++;
+                        AppendLog($"❌ {nextItem.GameInfo.TitleName} error: {ex.Message}");
+                    }
 
-                converter.OnLog += msg =>
-                {
-                    Dispatcher.Invoke(() => AppendLog(msg));
-                };
-
-                var convResult = await Task.Run(
-                    () => converter.ConvertAsync(inputPath, outputPath, _gameInfo.AutoLabel, _cts.Token));
-
-                if (convResult.Success)
-                {
-                    TxtProgressStage.Foreground = FindResource("AccentGreenBrush") as System.Windows.Media.SolidColorBrush;
-                    TxtStatus.Text = $"✅ Done — {Ufs2Converter.FormatSize(convResult.FileSize)} saved to {Path.GetFileName(outputPath)}";
-
-                    MessageBox.Show(
-                        $"Conversion complete!\n\n" +
-                        $"Game: {_gameInfo.TitleName}\n" +
-                        $"Output: {outputPath}\n" +
-                        $"Size: {Ufs2Converter.FormatSize(convResult.FileSize)}\n" +
-                        $"Block size: {convResult.OptimalBlockSize}\n" +
-                        $"Fragment size: {convResult.OptimalFragmentSize}",
-                        "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    UpdateQueueUI();
                 }
-                else if (!string.IsNullOrEmpty(convResult.ErrorMessage) && convResult.ErrorMessage != "Conversion was cancelled.")
+
+                // Final summary
+                if (!_cts.Token.IsCancellationRequested)
                 {
-                    MessageBox.Show($"Conversion failed:\n\n{convResult.ErrorMessage}",
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    TxtStatus.Text = $"✅ Queue complete — {completed} succeeded, {failed} failed";
+                    if (completed > 0 && failed == 0)
+                    {
+                        MessageBox.Show(
+                            $"All {completed} game{(completed == 1 ? "" : "s")} converted successfully!",
+                            "Queue Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else if (completed > 0)
+                    {
+                        MessageBox.Show(
+                            $"{completed} succeeded, {failed} failed.\nCheck the log for details.",
+                            "Queue Complete", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Unexpected error:\n\n{ex.Message}", "Error",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                else
+                {
+                    TxtStatus.Text = "Queue cancelled";
+                }
             }
             finally
             {
-                _isConverting = false;
+                _isProcessingQueue = false;
                 _cts?.Dispose();
                 _cts = null;
                 SetConvertingState(false);
-
-                // Save settings
                 SettingsManager.Save(_settings);
             }
         }
 
         private void BtnCancel_Click(object sender, RoutedEventArgs e)
         {
-            _cts?.Cancel();
+            var result = MessageBox.Show(
+                "Are you sure you want to cancel the current conversion?\n\nThe current item will be stopped and remaining items will be skipped.",
+                "Cancel Conversion", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                _cts?.Cancel();
+            }
         }
 
         private void SetConvertingState(bool converting)
@@ -376,14 +593,12 @@ namespace Dump2UfsGui
             BtnConvert.IsEnabled = !converting;
             BtnConvert.Visibility = converting ? Visibility.Collapsed : Visibility.Visible;
             BtnCancel.Visibility = converting ? Visibility.Visible : Visibility.Collapsed;
-            DropZoneBorder.IsEnabled = !converting;
             BtnBrowseOutput.IsEnabled = !converting;
-            TxtOutputPath.IsReadOnly = converting;
-            PanelProgress.Visibility = converting ? Visibility.Visible : PanelProgress.Visibility;
+            TxtOutputDir.IsReadOnly = converting;
 
             if (!converting)
             {
-                BtnConvert.IsEnabled = _gameInfo != null && _ufs2ToolPath != null;
+                BtnConvert.IsEnabled = _queue.Any(q => q.Status == QueueItemStatus.Waiting) && _ufs2ToolPath != null;
             }
         }
 
@@ -393,8 +608,52 @@ namespace Dump2UfsGui
 
         private void AppendLog(string message)
         {
-            TxtLog.AppendText(message + Environment.NewLine);
+            // Smart dedup: if this line has the same prefix as the last, replace it
+            var prefix = GetLogLinePrefix(message);
+            if (!string.IsNullOrEmpty(prefix) && prefix == _lastLogPrefix && _lastLogLineStart >= 0)
+            {
+                // Replace the last line
+                var text = TxtLog.Text;
+                TxtLog.Text = text.Substring(0, _lastLogLineStart) + message + Environment.NewLine;
+            }
+            else
+            {
+                _lastLogLineStart = TxtLog.Text.Length;
+                TxtLog.AppendText(message + Environment.NewLine);
+                _lastLogPrefix = prefix;
+            }
             TxtLog.ScrollToEnd();
+        }
+
+        /// <summary>
+        /// Extracts a stable prefix from progress lines like "Adding files to image...  17% (114/376 files, 1.44 GiB/8.47 GiB)"
+        /// so we can detect repeating lines that only differ in numbers.
+        /// Returns empty string if this doesn't look like a progress line.
+        /// </summary>
+        private static string GetLogLinePrefix(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) return "";
+            var trimmed = line.TrimStart();
+
+            // Match lines like "Adding files to image...", "Block XXXX:", etc.
+            // Extract text up to the first number or percentage
+            int firstDigit = -1;
+            for (int i = 0; i < trimmed.Length; i++)
+            {
+                if (char.IsDigit(trimmed[i]))
+                {
+                    firstDigit = i;
+                    break;
+                }
+            }
+
+            if (firstDigit > 3)
+            {
+                // Has a meaningful text prefix before numbers
+                return trimmed.Substring(0, firstDigit).TrimEnd();
+            }
+
+            return "";
         }
 
         private void BtnClearLog_Click(object sender, RoutedEventArgs e)
@@ -402,63 +661,29 @@ namespace Dump2UfsGui
             TxtLog.Clear();
         }
 
+        private void BtnShowLog_Click(object sender, RoutedEventArgs e)
+        {
+            if (PanelLog.Visibility == Visibility.Visible)
+            {
+                PanelLog.Visibility = Visibility.Collapsed;
+                LogColumn.Width = new GridLength(0);
+            }
+            else
+            {
+                PanelLog.Visibility = Visibility.Visible;
+                LogColumn.Width = new GridLength(1, GridUnitType.Star);
+            }
+        }
+
+        private void BtnToggleLog_Click(object sender, RoutedEventArgs e)
+        {
+            PanelLog.Visibility = Visibility.Collapsed;
+            LogColumn.Width = new GridLength(0);
+        }
+
         // ═══════════════════════════════════════════
         // SETUP / UFS2TOOL MANAGEMENT
         // ═══════════════════════════════════════════
-
-        private async void BtnSetupDownload_Click(object sender, RoutedEventArgs e)
-        {
-            BtnSetupDownload.IsEnabled = false;
-            BtnSetupBrowse.IsEnabled = false;
-            SetupProgress.Visibility = Visibility.Visible;
-            SetupProgress.IsIndeterminate = true;
-            TxtSetupProgress.Visibility = Visibility.Visible;
-
-            try
-            {
-                TxtSetupMessage.Text = "Checking for the latest version...";
-
-                var update = await SettingsManager.CheckForUpdateAsync(null);
-
-                if (string.IsNullOrEmpty(update.DownloadUrl))
-                {
-                    TxtSetupMessage.Text = "Could not find the download URL. Please download UFS2Tool.exe manually from GitHub.";
-                    BtnSetupBrowse.IsEnabled = true;
-                    return;
-                }
-
-                await SettingsManager.DownloadUfs2ToolAsync(
-                    update.DownloadUrl,
-                    update.LatestVersion,
-                    progress => Dispatcher.Invoke(() => TxtSetupProgress.Text = progress));
-
-                _settings = SettingsManager.Load();
-                _ufs2ToolPath = SettingsManager.FindUfs2Tool(_settings);
-
-                if (_ufs2ToolPath != null)
-                {
-                    OverlaySetup.Visibility = Visibility.Collapsed;
-                    UpdateToolVersionDisplay();
-                    AppendLog($"UFS2Tool {_settings.Ufs2ToolVersion} downloaded and ready.");
-                    TxtStatus.Text = "Ready — select a PS5 game dump folder to begin";
-                }
-                else
-                {
-                    TxtSetupMessage.Text = "Download completed but UFS2Tool.exe was not found in the extracted files. Please locate it manually.";
-                    BtnSetupBrowse.IsEnabled = true;
-                }
-            }
-            catch (Exception ex)
-            {
-                TxtSetupMessage.Text = $"Download failed: {ex.Message}\n\nPlease download UFS2Tool.exe manually.";
-                BtnSetupBrowse.IsEnabled = true;
-            }
-            finally
-            {
-                SetupProgress.IsIndeterminate = false;
-                BtnSetupDownload.IsEnabled = true;
-            }
-        }
 
         private void BtnSetupBrowse_Click(object sender, RoutedEventArgs e)
         {
@@ -476,77 +701,13 @@ namespace Dump2UfsGui
                 SettingsManager.Save(_settings);
 
                 OverlaySetup.Visibility = Visibility.Collapsed;
-                UpdateToolVersionDisplay();
                 AppendLog($"UFS2Tool.exe set to: {dialog.FileName}");
-                TxtStatus.Text = "Ready — select a PS5 game dump folder to begin";
+                TxtStatus.Text = "Ready — drag PS5 game dump folders to add to queue";
 
-                if (_gameInfo != null)
-                    BtnConvert.IsEnabled = true;
+                UpdateQueueUI();
             }
         }
 
-        private async void BtnCheckUpdate_Click(object sender, RoutedEventArgs e)
-        {
-            BtnCheckUpdate.IsEnabled = false;
-            BtnCheckUpdate.Content = "🔄 Checking...";
-            AppendLog("Checking for UFS2Tool updates...");
 
-            try
-            {
-                var update = await SettingsManager.CheckForUpdateAsync(_settings.Ufs2ToolVersion);
-
-                if (update.UpdateAvailable && !string.IsNullOrEmpty(update.LatestVersion))
-                {
-                    var current = _settings.Ufs2ToolVersion ?? "unknown";
-                    var result = MessageBox.Show(
-                        $"A new version of UFS2Tool is available!\n\n" +
-                        $"Current: {current}\n" +
-                        $"Latest: {update.LatestVersion}\n\n" +
-                        $"Download and install the update?",
-                        "Update Available", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-                    if (result == MessageBoxResult.Yes)
-                    {
-                        AppendLog($"Downloading UFS2Tool {update.LatestVersion}...");
-                        await SettingsManager.DownloadUfs2ToolAsync(
-                            update.DownloadUrl,
-                            update.LatestVersion,
-                            progress => Dispatcher.Invoke(() =>
-                            {
-                                AppendLog(progress);
-                                TxtStatus.Text = progress;
-                            }));
-
-                        _settings = SettingsManager.Load();
-                        _ufs2ToolPath = SettingsManager.FindUfs2Tool(_settings);
-                        UpdateToolVersionDisplay();
-                        AppendLog($"Updated to UFS2Tool {_settings.Ufs2ToolVersion}!");
-                    }
-                }
-                else
-                {
-                    AppendLog("UFS2Tool is up to date.");
-                    MessageBox.Show("UFS2Tool is already up to date!", "No Updates",
-                        MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                AppendLog($"Update check failed: {ex.Message}");
-                MessageBox.Show($"Failed to check for updates:\n\n{ex.Message}",
-                    "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-            finally
-            {
-                BtnCheckUpdate.IsEnabled = true;
-                BtnCheckUpdate.Content = "🔄 Update UFS2Tool";
-            }
-        }
-
-        private void UpdateToolVersionDisplay()
-        {
-            var version = _settings.Ufs2ToolVersion ?? "bundled";
-            TxtToolVersion.Text = $"UFS2Tool: {version}";
-        }
     }
 }

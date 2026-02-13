@@ -20,6 +20,21 @@ A simple Windows GUI wrapper for **dump2ufs**. This tool simplifies the process 
 3. **Drag and drop** your PS5 game folder into the window.
 4. **Click "Convert"** and wait for the process to finish.
 
+## Building from Source
+
+To build the compressed, single-file executable yourself:
+
+1. Ensure you have the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) installed.
+2. Clone the repository and navigate to the project folder.
+3. Run the following command:
+
+```powershell
+dotnet publish -c Release
+```
+
+The output executable will be located at:  
+`bin\Release\net8.0-windows\win-x64\publish\dump2ufs-gui.exe`
+
 ## Credits
 
 - **JD Ros**: GUI Implementation.

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("dump2ufs-gui")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+17d24816dd3a48698cc9ed3bca05a06559379dfe")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b84bfe5827ceb50158e21dbc946fd77c5697462d")]
 [assembly: System.Reflection.AssemblyProductAttribute("dump2ufs-gui")]
 [assembly: System.Reflection.AssemblyTitleAttribute("dump2ufs-gui")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
