@@ -5,12 +5,12 @@
         Width="720" Height="700" MinWidth="600" MinHeight="600"
         Background="{StaticResource BgDarkBrush}"
         WindowStartupLocation="CenterScreen"
-        AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver"
-        Loaded="Window_Loaded">
+        Loaded="Window_Loaded"
+        Icon="pack://application:,,,/ico.png">
 
     <Window.Resources>
         <!-- Glow effect for cards -->
-        <DropShadowEffect x:Key="CardGlow" Color="#58A6FF" BlurRadius="0" ShadowDepth="0" Opacity="0"/>
+        <DropShadowEffect x:Key="CardGlow" Color="#7B2FFF" BlurRadius="0" ShadowDepth="0" Opacity="0"/>
     </Window.Resources>
 
     <Grid>
@@ -31,7 +31,7 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="📦" FontSize="24" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Image Source="pack://application:,,,/ico.png" Width="28" Height="28" VerticalAlignment="Center" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality"/>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="dump2ufs" FontSize="18" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
                         <TextBlock Text="PS5 Game Dump → .ffpkg Converter" FontSize="11" 
@@ -40,113 +40,155 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="BtnCheckUpdate" Content="🔄 Check for Updates"
+                    <Button x:Name="BtnCheckUpdate" Content="🔄 Update UFS2Tool"
                             Style="{StaticResource SecondaryButton}" Click="BtnCheckUpdate_Click"
                             Margin="0,0,8,0" FontSize="11"/>
-                    <Border Background="{StaticResource BgCardBrush}" CornerRadius="6" Padding="8,4"
+                    <Border Background="{StaticResource BgCardBrush}" CornerRadius="6" Padding="8,5"
                             BorderBrush="{StaticResource BorderDimBrush}" BorderThickness="1">
                         <TextBlock x:Name="TxtToolVersion" Text="UFS2Tool: —" FontSize="11"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                     </Border>
                 </StackPanel>
             </Grid>
         </Border>
 
         <!-- ═══ MAIN CONTENT ═══ -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="24,20">
-            <StackPanel MaxWidth="640" HorizontalAlignment="Center" Width="640">
+        <Grid Grid.Row="1" Margin="24,16,24,12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-                <!-- ── INPUT SECTION ── -->
-                <Border Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="20"
-                        BorderBrush="{StaticResource BorderDimBrush}" BorderThickness="1"
-                        Margin="0,0,0,16">
-                    <StackPanel>
-                        <TextBlock Text="INPUT" Style="{StaticResource SectionLabel}" 
-                                   Foreground="{StaticResource AccentBlueBrush}"/>
-                        <TextBlock Text="PS5 Game Dump Folder" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox x:Name="TxtInputPath" Grid.Column="0" IsReadOnly="True"
-                                     FontSize="12" Margin="0,0,8,0">
-                                <TextBox.Style>
-                                    <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-                                        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Text.Length, RelativeSource={RelativeSource Self}, FallbackValue=0}" Value="0">
-                                                <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBox.Style>
-                            </TextBox>
-                            <Button x:Name="BtnBrowseInput" Grid.Column="1" Content="📁 Browse"
-                                    Style="{StaticResource SecondaryButton}" Click="BtnBrowseInput_Click"/>
-                        </Grid>
-
-                        <!-- Drop hint -->
-                        <TextBlock x:Name="TxtDropHint" Text="or drag and drop a folder here" 
-                                   FontSize="11" Foreground="{StaticResource TextMutedBrush}" 
-                                   HorizontalAlignment="Center" Margin="0,8,0,0"/>
-
-                        <!-- Game info panel (hidden until valid) -->
-                        <Border x:Name="PanelGameInfo" Visibility="Collapsed"
-                                Background="#0D58A6FF" CornerRadius="8" Padding="14" Margin="0,14,0,0"
-                                BorderBrush="#3058A6FF" BorderThickness="1">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="🎮" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <TextBlock x:Name="TxtGameTitle" FontSize="14" FontWeight="SemiBold" 
-                                               Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="ID:" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" 
-                                               Margin="26,0,4,0"/>
-                                    <TextBlock x:Name="TxtGameId" FontSize="11" Foreground="{StaticResource AccentPurpleBrush}"/>
-                                    <TextBlock Text="  •  Label:" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" 
-                                               Margin="8,0,4,0"/>
-                                    <TextBlock x:Name="TxtLabel" FontSize="11" Foreground="{StaticResource AccentOrangeBrush}"/>
-                                </StackPanel>
+            <!-- ── INPUT / DROP ZONE SECTION ── -->
+            <Border Grid.Row="0" Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="16"
+                    BorderBrush="{StaticResource BorderDimBrush}" BorderThickness="1"
+                    Margin="0,0,0,10">
+                <StackPanel>
+                    <!-- ── DRAG-AND-DROP ZONE ── -->
+                    <Border x:Name="DropZoneBorder" CornerRadius="10" Padding="0"
+                            Margin="0,0,0,10"
+                            AllowDrop="True"
+                            Drop="DropZone_Drop" DragOver="DropZone_DragOver" DragLeave="DropZone_DragLeave"
+                            Cursor="Hand" MouseLeftButtonDown="DropZone_MouseClick">
+                        <Border.BorderBrush>
+                            <SolidColorBrush x:Name="DropZoneBorderBrush" Color="#353560"/>
+                        </Border.BorderBrush>
+                        <Border.BorderThickness>
+                            <Thickness>2</Thickness>
+                        </Border.BorderThickness>
+                        <Border.Background>
+                            <SolidColorBrush x:Name="DropZoneBgBrush" Color="#0A0A1A"/>
+                        </Border.Background>
+                        <Grid MinHeight="110">
+                            <!-- Drop zone content -->
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <!-- Folder icon -->
+                                <TextBlock x:Name="DropZoneIcon" Text="📂" FontSize="36" 
+                                           HorizontalAlignment="Center" Margin="0,0,0,8"
+                                           RenderTransformOrigin="0.5,0.5">
+                                    <TextBlock.RenderTransform>
+                                        <ScaleTransform x:Name="DropZoneIconScale" ScaleX="1" ScaleY="1"/>
+                                    </TextBlock.RenderTransform>
+                                </TextBlock>
+                                <!-- Instructions -->
+                                <TextBlock x:Name="DropZoneText" Text="Drag &amp; drop a PS5 game dump folder here"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                <TextBlock x:Name="DropZoneSubText" Text="or click to browse"
+                                           FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                           HorizontalAlignment="Center"/>
                             </StackPanel>
-                        </Border>
 
-                        <!-- Error panel -->
-                        <Border x:Name="PanelInputError" Visibility="Collapsed"
-                                Background="#15F85149" CornerRadius="8" Padding="12" Margin="0,14,0,0"
-                                BorderBrush="#30F85149" BorderThickness="1">
-                            <TextBlock x:Name="TxtInputError" FontSize="12" Foreground="{StaticResource AccentRedBrush}"
-                                       TextWrapping="Wrap"/>
-                        </Border>
-                    </StackPanel>
-                </Border>
+                            <!-- Drag-over highlight overlay -->
+                            <Border x:Name="DropZoneHighlight" CornerRadius="10" IsHitTestVisible="False"
+                                    Visibility="Collapsed">
+                                <Border.Background>
+                                    <SolidColorBrush Color="#7B2FFF" Opacity="0.08"/>
+                                </Border.Background>
+                            </Border>
+                        </Grid>
+                    </Border>
 
-                <!-- ── OUTPUT SECTION ── -->
-                <Border Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="20"
-                        BorderBrush="{StaticResource BorderDimBrush}" BorderThickness="1"
-                        Margin="0,0,0,16">
-                    <StackPanel>
-                        <TextBlock Text="OUTPUT" Style="{StaticResource SectionLabel}" 
-                                   Foreground="{StaticResource AccentGreenBrush}"/>
-                        <TextBlock Text="Output .ffpkg File" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,10"/>
-
+                    <!-- Currently selected path (shown after selection) -->
+                    <Border x:Name="PanelSelectedPath" Visibility="Collapsed"
+                            Background="#0D7B2FFF" CornerRadius="6" Padding="10" Margin="0,0,0,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="TxtOutputPath" Grid.Column="0" FontSize="12" Margin="0,0,8,0"/>
-                            <Button x:Name="BtnBrowseOutput" Grid.Column="1" Content="💾 Save As"
-                                    Style="{StaticResource SecondaryButton}" Click="BtnBrowseOutput_Click"/>
+                            <TextBlock Grid.Column="0" Text="📁" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="TxtInputPath" Grid.Column="1" FontSize="12"
+                                       Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <Button x:Name="BtnClearInput" Grid.Column="2" Content="✕" FontSize="11"
+                                    Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center"
+                                    Click="BtnClearInput_Click">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                        <Setter Property="FontSize" Value="11"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
                         </Grid>
-                    </StackPanel>
-                </Border>
+                    </Border>
 
-                <!-- ── CONVERT BUTTON ── -->
+                    <!-- Game info panel (hidden until valid) -->
+                    <Border x:Name="PanelGameInfo" Visibility="Collapsed"
+                            Background="#0D7B2FFF" CornerRadius="6" Padding="10" Margin="0,8,0,0"
+                            BorderBrush="#307B2FFF" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🎮" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock x:Name="TxtGameTitle" FontSize="13" FontWeight="SemiBold" 
+                                       Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Text="  •  " FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtGameId" FontSize="11" Foreground="{StaticResource AccentPurpleBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Text="  •  " FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtLabel" FontSize="11" Foreground="{StaticResource AccentOrangeBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Error panel -->
+                    <Border x:Name="PanelInputError" Visibility="Collapsed"
+                            Background="#15F85149" CornerRadius="6" Padding="10" Margin="0,8,0,0"
+                            BorderBrush="#30F85149" BorderThickness="1">
+                        <TextBlock x:Name="TxtInputError" FontSize="11" Foreground="{StaticResource AccentRedBrush}"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!-- ── OUTPUT SECTION ── -->
+            <Border Grid.Row="1" Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="16"
+                    BorderBrush="{StaticResource BorderDimBrush}" BorderThickness="1"
+                    Margin="0,0,0,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="💾" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBox x:Name="TxtOutputPath" Grid.Column="1" FontSize="12" Margin="0,0,8,0"/>
+                    <Button x:Name="BtnBrowseOutput" Grid.Column="2" Content="Save As"
+                            Style="{StaticResource SecondaryButton}" Click="BtnBrowseOutput_Click"/>
+                </Grid>
+            </Border>
+
+            <!-- ── CONVERT / CANCEL BUTTONS ── -->
+            <Grid Grid.Row="2" Margin="0,2,0,10">
                 <Button x:Name="BtnConvert" Style="{StaticResource PrimaryButton}"
-                        HorizontalAlignment="Stretch" Margin="0,4,0,16"
+                        HorizontalAlignment="Stretch"
                         Click="BtnConvert_Click" IsEnabled="False">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="⚡" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -154,79 +196,78 @@
                     </StackPanel>
                 </Button>
 
-                <!-- ── CANCEL BUTTON (hidden until converting) ── -->
                 <Button x:Name="BtnCancel" Visibility="Collapsed"
-                        HorizontalAlignment="Center" Margin="0,0,0,8"
+                        HorizontalAlignment="Stretch"
                         Click="BtnCancel_Click" Cursor="Hand">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
                             <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
                             <Setter Property="BorderBrush" Value="#30F85149"/>
+                            <Setter Property="Padding" Value="24,12"/>
                         </Style>
                     </Button.Style>
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="✕" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <TextBlock Text="Cancel" FontSize="12" VerticalAlignment="Center"/>
+                        <TextBlock Text="✕" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="Cancel Conversion" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
+            </Grid>
 
-                <!-- ── PROGRESS SECTION ── -->
-                <Border x:Name="PanelProgress" Visibility="Collapsed"
-                        Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="20"
-                        BorderBrush="{StaticResource BorderDimBrush}" BorderThickness="1"
-                        Margin="0,0,0,16">
-                    <StackPanel>
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="TxtProgressStage" Grid.Column="0"
-                                       FontSize="13" FontWeight="SemiBold" 
-                                       Foreground="{StaticResource AccentBlueBrush}"/>
-                            <TextBlock x:Name="TxtProgressPercent" Grid.Column="1"
-                                       FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
-                        </Grid>
-                        <ProgressBar x:Name="ProgressBar" Minimum="0" Maximum="100" Value="0" Margin="0,0,0,8"/>
-                        <TextBlock x:Name="TxtProgressDetail" FontSize="11" 
-                                   Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"/>
-                    </StackPanel>
-                </Border>
+            <!-- ── PROGRESS SECTION ── -->
+            <Border x:Name="PanelProgress" Grid.Row="3" Visibility="Collapsed"
+                    Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="14"
+                    BorderBrush="{StaticResource BorderDimBrush}" BorderThickness="1"
+                    Margin="0,0,0,10">
+                <StackPanel>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="TxtProgressStage" Grid.Column="0"
+                                   FontSize="12" FontWeight="SemiBold" 
+                                   Foreground="{StaticResource AccentBlueBrush}"/>
+                        <TextBlock x:Name="TxtProgressPercent" Grid.Column="1"
+                                   FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Grid>
+                    <ProgressBar x:Name="ProgressBar" Minimum="0" Maximum="100" Value="0" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="TxtProgressDetail" FontSize="10" 
+                               Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
 
-                <!-- ── LOG OUTPUT ── -->
-                <Border Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="16"
-                        BorderBrush="{StaticResource BorderDimBrush}" BorderThickness="1"
-                        Margin="0,0,0,16">
-                    <StackPanel>
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="📋 Log Output" FontSize="12" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextSecondaryBrush}" Grid.Column="0"/>
-                            <Button x:Name="BtnClearLog" Grid.Column="1" Content="Clear"
-                                    FontSize="10" Padding="8,3" Click="BtnClearLog_Click">
-                                <Button.Style>
-                                    <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
-                                        <Setter Property="FontSize" Value="10"/>
-                                    </Style>
-                                </Button.Style>
-                            </Button>
-                        </Grid>
-                        <Border Background="{StaticResource BgInputBrush}" CornerRadius="6" Padding="2"
-                                BorderBrush="{StaticResource BorderDimBrush}" BorderThickness="1">
-                            <TextBox x:Name="TxtLog" IsReadOnly="True" TextWrapping="Wrap"
-                                     VerticalScrollBarVisibility="Auto" Height="180"
-                                     FontFamily="Cascadia Code, Consolas, monospace" FontSize="11"
-                                     Background="Transparent" BorderThickness="0" Padding="8"
-                                     Foreground="{StaticResource TextSecondaryBrush}"/>
-                        </Border>
-                    </StackPanel>
-                </Border>
+            <!-- ── LOG OUTPUT (fills remaining space) ── -->
+            <Border Grid.Row="4" Background="{StaticResource BgCardBrush}" CornerRadius="10" Padding="12"
+                    BorderBrush="{StaticResource BorderDimBrush}" BorderThickness="1">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="📋 Log Output" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}" Grid.Column="0"/>
+                        <Button x:Name="BtnClearLog" Grid.Column="1" Content="Clear"
+                                FontSize="10" Padding="8,3" Click="BtnClearLog_Click">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                    <Setter Property="FontSize" Value="10"/>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </Grid>
+                    <Border Background="{StaticResource BgInputBrush}" CornerRadius="6" Padding="2"
+                            BorderBrush="{StaticResource BorderDimBrush}" BorderThickness="1">
+                        <TextBox x:Name="TxtLog" IsReadOnly="True" TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto"
+                                 FontFamily="Cascadia Code, Consolas, monospace" FontSize="11"
+                                 Background="Transparent" BorderThickness="0" Padding="8"
+                                 Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </Border>
+                </DockPanel>
+            </Border>
 
-            </StackPanel>
-        </ScrollViewer>
+        </Grid>
 
         <!-- ═══ STATUS BAR ═══ -->
         <Border Grid.Row="2" Background="{StaticResource BgMediumBrush}"

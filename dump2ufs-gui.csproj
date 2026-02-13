@@ -8,11 +8,16 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Dump2UfsGui</RootNamespace>
     <AssemblyName>dump2ufs-gui</AssemblyName>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="ico.png" />
+  </ItemGroup>
 
 </Project>

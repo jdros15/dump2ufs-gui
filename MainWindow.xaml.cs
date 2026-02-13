@@ -1,9 +1,14 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Forms;
+using System.Windows.Interop;
 using Dump2UfsGui.Services;
 using MessageBox = System.Windows.MessageBox;
 
@@ -11,6 +16,20 @@ namespace Dump2UfsGui
 {
     public partial class MainWindow : Window
     {
+        // Win32 interop to hide title bar icon
+        [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
+        [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
+        [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr hwndInsertAfter, int x, int y, int cx, int cy, uint flags);
+        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        private const int GWL_EXSTYLE = -20;
+        private const int WS_EX_DLGMODALFRAME = 0x0001;
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOZORDER = 0x0004;
+        private const uint SWP_FRAMECHANGED = 0x0020;
+        private const uint WM_SETICON = 0x0080;
+
         private SettingsData _settings = new();
         private GameInfo? _gameInfo;
         private string? _ufs2ToolPath;
@@ -20,6 +39,17 @@ namespace Dump2UfsGui
         public MainWindow()
         {
             InitializeComponent();
+            SourceInitialized += MainWindow_SourceInitialized;
+        }
+
+        private void MainWindow_SourceInitialized(object? sender, EventArgs e)
+        {
+            // Remove icon from title bar but keep it in taskbar
+            var hwnd = new WindowInteropHelper(this).Handle;
+            int extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_DLGMODALFRAME);
+            SendMessage(hwnd, WM_SETICON, IntPtr.Zero, IntPtr.Zero); // clear small icon (title bar only)
+            SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
         }
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -60,7 +90,9 @@ namespace Dump2UfsGui
             }
         }
 
-        private void Window_DragOver(object sender, System.Windows.DragEventArgs e)
+        // ─── DROP ZONE HANDLERS ───
+
+        private void DropZone_DragOver(object sender, System.Windows.DragEventArgs e)
         {
             if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
             {
@@ -68,16 +100,25 @@ namespace Dump2UfsGui
                 if (paths.Length > 0 && Directory.Exists(paths[0]))
                 {
                     e.Effects = System.Windows.DragDropEffects.Copy;
+                    SetDropZoneActive(true);
                     e.Handled = true;
                     return;
                 }
             }
+            // Reject non-folder drops
             e.Effects = System.Windows.DragDropEffects.None;
             e.Handled = true;
         }
 
-        private void Window_Drop(object sender, System.Windows.DragEventArgs e)
+        private void DropZone_DragLeave(object sender, System.Windows.DragEventArgs e)
         {
+            SetDropZoneActive(false);
+        }
+
+        private void DropZone_Drop(object sender, System.Windows.DragEventArgs e)
+        {
+            SetDropZoneActive(false);
+
             if (e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
             {
                 var paths = (string[])e.Data.GetData(System.Windows.DataFormats.FileDrop)!;
@@ -88,13 +129,66 @@ namespace Dump2UfsGui
             }
         }
 
+        private void DropZone_MouseClick(object sender, MouseButtonEventArgs e)
+        {
+            // Clicking the drop zone opens the folder browser
+            BtnBrowseInput_Click(sender, new RoutedEventArgs());
+        }
+
+        private void BtnClearInput_Click(object sender, RoutedEventArgs e)
+        {
+            TxtInputPath.Text = "";
+            _gameInfo = null;
+            BtnConvert.IsEnabled = false;
+            PanelGameInfo.Visibility = Visibility.Collapsed;
+            PanelInputError.Visibility = Visibility.Collapsed;
+            PanelSelectedPath.Visibility = Visibility.Collapsed;
+            DropZoneBorder.Visibility = Visibility.Visible;
+            TxtStatus.Text = "Ready — select a PS5 game dump folder to begin";
+            TxtOutputPath.Text = "";
+        }
+
+        private void SetDropZoneActive(bool active)
+        {
+            if (active)
+            {
+                DropZoneBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#7B2FFF");
+                DropZoneBgBrush.Color = (Color)ColorConverter.ConvertFromString("#120D25");
+                DropZoneHighlight.Visibility = Visibility.Visible;
+                DropZoneText.Text = "Drop your folder here!";
+                DropZoneText.Foreground = FindResource("AccentPurpleBrush") as SolidColorBrush;
+
+                // Scale up the icon
+                var scaleUp = new DoubleAnimation(1.2, TimeSpan.FromMilliseconds(150))
+                { EasingFunction = new QuadraticEase() };
+                DropZoneIconScale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleUp);
+                DropZoneIconScale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleUp);
+            }
+            else
+            {
+                DropZoneBorderBrush.Color = (Color)ColorConverter.ConvertFromString("#353560");
+                DropZoneBgBrush.Color = (Color)ColorConverter.ConvertFromString("#0A0A1A");
+                DropZoneHighlight.Visibility = Visibility.Collapsed;
+                DropZoneText.Text = "Drag & drop a PS5 game dump folder here";
+                DropZoneText.Foreground = FindResource("TextSecondaryBrush") as SolidColorBrush;
+
+                // Scale back icon
+                var scaleDown = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(150))
+                { EasingFunction = new QuadraticEase() };
+                DropZoneIconScale.BeginAnimation(ScaleTransform.ScaleXProperty, scaleDown);
+                DropZoneIconScale.BeginAnimation(ScaleTransform.ScaleYProperty, scaleDown);
+            }
+        }
+
         private void SetInputPath(string path)
         {
             TxtInputPath.Text = path;
-            TxtInputPath.Foreground = FindResource("TextPrimaryBrush") as System.Windows.Media.SolidColorBrush;
             PanelGameInfo.Visibility = Visibility.Collapsed;
             PanelInputError.Visibility = Visibility.Collapsed;
-            TxtDropHint.Visibility = Visibility.Collapsed;
+
+            // Show selected path panel, hide the drop zone
+            DropZoneBorder.Visibility = Visibility.Collapsed;
+            PanelSelectedPath.Visibility = Visibility.Visible;
 
             _settings.LastInputDir = Path.GetDirectoryName(path);
 
@@ -282,7 +376,7 @@ namespace Dump2UfsGui
             BtnConvert.IsEnabled = !converting;
             BtnConvert.Visibility = converting ? Visibility.Collapsed : Visibility.Visible;
             BtnCancel.Visibility = converting ? Visibility.Visible : Visibility.Collapsed;
-            BtnBrowseInput.IsEnabled = !converting;
+            DropZoneBorder.IsEnabled = !converting;
             BtnBrowseOutput.IsEnabled = !converting;
             TxtOutputPath.IsReadOnly = converting;
             PanelProgress.Visibility = converting ? Visibility.Visible : PanelProgress.Visibility;
@@ -445,7 +539,7 @@ namespace Dump2UfsGui
             finally
             {
                 BtnCheckUpdate.IsEnabled = true;
-                BtnCheckUpdate.Content = "🔄 Check for Updates";
+                BtnCheckUpdate.Content = "🔄 Update UFS2Tool";
             }
         }
 

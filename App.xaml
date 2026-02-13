@@ -4,21 +4,21 @@
              StartupUri="MainWindow.xaml">
     <Application.Resources>
         <ResourceDictionary>
-            <!-- Color Palette -->
-            <Color x:Key="BgDark">#0D1117</Color>
-            <Color x:Key="BgMedium">#161B22</Color>
-            <Color x:Key="BgCard">#1C2333</Color>
-            <Color x:Key="BgInput">#0D1117</Color>
-            <Color x:Key="BorderDim">#30363D</Color>
-            <Color x:Key="BorderFocus">#58A6FF</Color>
-            <Color x:Key="AccentBlue">#58A6FF</Color>
+            <!-- Color Palette — PS5-style deep navy + vibrant purple -->
+            <Color x:Key="BgDark">#080811</Color>
+            <Color x:Key="BgMedium">#0E0E1E</Color>
+            <Color x:Key="BgCard">#141428</Color>
+            <Color x:Key="BgInput">#0B0B18</Color>
+            <Color x:Key="BorderDim">#252545</Color>
+            <Color x:Key="BorderFocus">#7B2FFF</Color>
+            <Color x:Key="AccentBlue">#7B2FFF</Color>
             <Color x:Key="AccentGreen">#3FB950</Color>
-            <Color x:Key="AccentPurple">#BC8CFF</Color>
+            <Color x:Key="AccentPurple">#A855F7</Color>
             <Color x:Key="AccentOrange">#F0883E</Color>
             <Color x:Key="AccentRed">#F85149</Color>
-            <Color x:Key="TextPrimary">#E6EDF3</Color>
-            <Color x:Key="TextSecondary">#8B949E</Color>
-            <Color x:Key="TextMuted">#484F58</Color>
+            <Color x:Key="TextPrimary">#E8E8F0</Color>
+            <Color x:Key="TextSecondary">#7A7A9E</Color>
+            <Color x:Key="TextMuted">#46465E</Color>
 
             <SolidColorBrush x:Key="BgDarkBrush" Color="{StaticResource BgDark}"/>
             <SolidColorBrush x:Key="BgMediumBrush" Color="{StaticResource BgMedium}"/>
@@ -44,7 +44,7 @@
             <!-- Label Style -->
             <Style x:Key="SectionLabel" TargetType="TextBlock">
                 <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                <Setter Property="FontSize" Value="11"/>
+                <Setter Property="FontSize" Value="10"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="Margin" Value="0,0,0,6"/>
                 <Setter Property="FontFamily" Value="Segoe UI, sans-serif"/>
@@ -74,7 +74,7 @@
                                     <Setter Property="BorderBrush" Value="{StaticResource BorderFocusBrush}"/>
                                 </Trigger>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="BorderBrush" Value="{StaticResource TextMutedBrush}"/>
+                                    <Setter Property="BorderBrush" Value="#3D3D60"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -82,14 +82,11 @@
                 </Setter>
             </Style>
 
-            <!-- Primary Button -->
+            <!-- Primary Button — vibrant purple gradient -->
             <Style x:Key="PrimaryButton" TargetType="Button">
                 <Setter Property="Background">
                     <Setter.Value>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                            <GradientStop Color="#58A6FF" Offset="0"/>
-                            <GradientStop Color="#BC8CFF" Offset="1"/>
-                        </LinearGradientBrush>
+                        <SolidColorBrush Color="#2563EB"/>
                     </Setter.Value>
                 </Setter>
                 <Setter Property="Foreground" Value="White"/>
@@ -112,7 +109,7 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="border" Property="Opacity" Value="0.85"/>
+                                    <Setter TargetName="border" Property="Opacity" Value="0.88"/>
                                     <Setter TargetName="border" Property="RenderTransform">
                                         <Setter.Value>
                                             <ScaleTransform ScaleX="1.02" ScaleY="1.02"/>
@@ -128,7 +125,7 @@
                                     </Setter>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter TargetName="border" Property="Opacity" Value="0.4"/>
+                                    <Setter TargetName="border" Property="Opacity" Value="0.35"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -157,14 +154,14 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource TextMutedBrush}"/>
-                                    <Setter TargetName="border" Property="Background" Value="#242D3A"/>
+                                    <Setter TargetName="border" Property="BorderBrush" Value="#3D3D60"/>
+                                    <Setter TargetName="border" Property="Background" Value="#1C1C38"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter TargetName="border" Property="Background" Value="#1A2230"/>
+                                    <Setter TargetName="border" Property="Background" Value="#151530"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter TargetName="border" Property="Opacity" Value="0.4"/>
+                                    <Setter TargetName="border" Property="Opacity" Value="0.35"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -172,15 +169,16 @@
                 </Setter>
             </Style>
 
-            <!-- ProgressBar Style -->
+            <!-- ProgressBar Style — purple gradient -->
             <Style TargetType="ProgressBar">
-                <Setter Property="Height" Value="6"/>
-                <Setter Property="Background" Value="{StaticResource BgInputBrush}"/>
+                <Setter Property="Height" Value="8"/>
+                <Setter Property="Background" Value="#1A1A35"/>
                 <Setter Property="Foreground">
                     <Setter.Value>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                            <GradientStop Color="#58A6FF" Offset="0"/>
-                            <GradientStop Color="#BC8CFF" Offset="1"/>
+                            <GradientStop Color="#6C2FF2" Offset="0"/>
+                            <GradientStop Color="#A855F7" Offset="0.5"/>
+                            <GradientStop Color="#7B2FFF" Offset="1"/>
                         </LinearGradientBrush>
                     </Setter.Value>
                 </Setter>
@@ -189,9 +187,9 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="ProgressBar">
                             <Grid>
-                                <Border Background="{TemplateBinding Background}" CornerRadius="3"/>
-                                <Border x:Name="PART_Track" CornerRadius="3"/>
-                                <Border x:Name="PART_Indicator" CornerRadius="3"
+                                <Border Background="{TemplateBinding Background}" CornerRadius="4"/>
+                                <Border x:Name="PART_Track" CornerRadius="4"/>
+                                <Border x:Name="PART_Indicator" CornerRadius="4"
                                         Background="{TemplateBinding Foreground}"
                                         HorizontalAlignment="Left"/>
                             </Grid>
