@@ -134,6 +134,15 @@ namespace Dump2UfsGui
             if (_ufs2ToolPath != null)
             {
                 OverlaySetup.Visibility = Visibility.Collapsed;
+                
+                // Sync IsUpdateInstalled flag with reality
+                bool isUsingUpdate = UpdateService.IsUsingUpdate();
+                if (_settings.IsUpdateInstalled != isUsingUpdate)
+                {
+                    _settings.IsUpdateInstalled = isUsingUpdate;
+                    SettingsManager.Save(_settings);
+                }
+
                 RefreshToolStatus();
             }
             else
@@ -1019,6 +1028,19 @@ namespace Dump2UfsGui
                 TxtToolVersion.Text = "UFS2Tool v3.0 (Integrated)";
                 TxtToolVersion.Foreground = FindResource("TextMutedBrush") as SolidColorBrush;
             }
+
+            // Update the 'Update' button text if a new version is known
+            string currentVer = UpdateService.IsUsingUpdate() ? (_settings.Ufs2ToolVersion ?? "v3.0") : "v3.0";
+            if (!string.IsNullOrEmpty(_settings.LatestKnownVersion) && _settings.LatestKnownVersion != currentVer)
+            {
+                TxtUpdate.Text = $"Update to {_settings.LatestKnownVersion}";
+                TxtUpdateIcon.Text = "📥"; // Use a download icon for available update
+            }
+            else
+            {
+                TxtUpdate.Text = "Update";
+                TxtUpdateIcon.Text = "🔄";
+            }
         }
 
         private async void BtnCheckUpdate_Click(object sender, RoutedEventArgs e)
@@ -1048,6 +1070,13 @@ namespace Dump2UfsGui
 
                 if (hasUpdate)
                 {
+                    _settings.LatestKnownVersion = newVersion;
+                    SettingsManager.Save(_settings);
+                    RefreshToolStatus();
+
+                    // If discrete check, skip popup if already ignored
+                    if (isDiscrete && newVersion == _settings.IgnoredUpdateVersion) return;
+
                     // If discrete check, only prompt if not currently busy
                     if (isDiscrete && _isProcessingQueue) return;
 
@@ -1075,21 +1104,37 @@ namespace Dump2UfsGui
                         await UpdateService.DownloadAndInstallUpdateAsync(downloadUrl, progress);
                         
                         _settings.Ufs2ToolVersion = newVersion;
+                        _settings.IsUpdateInstalled = true;
+                        _settings.IgnoredUpdateVersion = null; // Reset ignore on successful update
                         SettingsManager.Save(_settings);
                         
                         _ufs2ToolPath = UpdateService.GetEffectiveToolPath();
                         RefreshToolStatus();
                         TxtStatus.Text = $"Successfully updated to UFS2Tool {newVersion}";
                     }
-                    else if (!isDiscrete)
+                    else
                     {
-                        TxtStatus.Text = "Update skipped.";
+                        // User said No, remember this version to skip the automatic popup next time
+                        _settings.IgnoredUpdateVersion = newVersion;
+                        SettingsManager.Save(_settings);
+                        if (!isDiscrete) TxtStatus.Text = "Update skipped.";
                     }
                 }
-                else if (!isDiscrete)
+                else
                 {
-                    MessageBox.Show("UFS2Tool is already up to date.", "No Updates", MessageBoxButton.OK, MessageBoxImage.Information);
-                    TxtStatus.Text = "UFS2Tool is up to date.";
+                    // No update found, clear latest known version if it matches current (to reset button text)
+                    if (_settings.LatestKnownVersion == currentVer)
+                    {
+                        _settings.LatestKnownVersion = null;
+                        SettingsManager.Save(_settings);
+                        RefreshToolStatus();
+                    }
+
+                    if (!isDiscrete)
+                    {
+                        MessageBox.Show("UFS2Tool is already up to date.", "No Updates", MessageBoxButton.OK, MessageBoxImage.Information);
+                        TxtStatus.Text = "UFS2Tool is up to date.";
+                    }
                 }
             }
             catch (Exception ex)
@@ -1116,8 +1161,13 @@ namespace Dump2UfsGui
             {
                 try
                 {
+                    // Mark the version we are reverting FROM as ignored, so we don't immediately prompt to re-install it
+                    _settings.IgnoredUpdateVersion = _settings.Ufs2ToolVersion;
+                    _settings.LatestKnownVersion = _settings.Ufs2ToolVersion; // Keep it as latest known so button shows it
+
                     UpdateService.UninstallUpdate();
                     _settings.Ufs2ToolVersion = "v3.0";
+                    _settings.IsUpdateInstalled = false;
                     SettingsManager.Save(_settings);
                     
                     _ufs2ToolPath = UpdateService.GetEffectiveToolPath();

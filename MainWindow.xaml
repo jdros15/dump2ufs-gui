@@ -735,8 +735,8 @@
                     <Button x:Name="BtnCheckUpdate" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
                             Padding="8,1" Click="BtnCheckUpdate_Click">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="🔄" FontSize="10" Margin="0,0,4,0"/>
-                            <TextBlock Text="Update" FontSize="10"/>
+                            <TextBlock x:Name="TxtUpdateIcon" Text="🔄" FontSize="10" Margin="0,0,4,0"/>
+                            <TextBlock x:Name="TxtUpdate" Text="Update" FontSize="10"/>
                         </StackPanel>
                     </Button>
                     <Button x:Name="BtnUninstallUpdate" Style="{StaticResource SecondaryButton}" Margin="4,0,0,0"

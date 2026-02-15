@@ -45,9 +45,13 @@ namespace Dump2UfsGui.Services
 
         public static bool VerifyIntegratedToolHealth()
         {
+            var exePath = FindExecutablePath(InternalToolDir);
+            if (string.IsNullOrEmpty(exePath)) return false;
+
+            var dir = Path.GetDirectoryName(exePath)!;
+
             // Critical files from the self-contained package
             string[] criticalFiles = {
-                "UFS2Tool.exe",
                 "UFS2Tool.dll",
                 "UFS2Tool.runtimeconfig.json",
                 "coreclr.dll",
@@ -56,11 +60,9 @@ namespace Dump2UfsGui.Services
                 "System.Private.CoreLib.dll"
             };
 
-            if (!Directory.Exists(InternalToolDir)) return false;
-
             foreach (var file in criticalFiles)
             {
-                if (!File.Exists(Path.Combine(InternalToolDir, file)))
+                if (!File.Exists(Path.Combine(dir, file)))
                 {
                     return false;
                 }
@@ -92,15 +94,17 @@ namespace Dump2UfsGui.Services
         public static string GetEffectiveToolPath()
         {
             // 1. Check updated tool (verify health)
-            if (VerifyUpdateHealth())
+            var updatedPath = FindExecutablePath(UpdatedToolDir);
+            if (!string.IsNullOrEmpty(updatedPath) && VerifyUpdateHealth())
             {
-                return Path.Combine(UpdatedToolDir, "UFS2Tool.exe");
+                return updatedPath;
             }
 
             // 2. Check internal tool (verify health)
-            if (VerifyIntegratedToolHealth())
+            var internalPath = FindExecutablePath(InternalToolDir);
+            if (!string.IsNullOrEmpty(internalPath) && VerifyIntegratedToolHealth())
             {
-                return Path.Combine(InternalToolDir, "UFS2Tool.exe");
+                return internalPath;
             }
 
             return "";
@@ -108,25 +112,42 @@ namespace Dump2UfsGui.Services
 
         public static bool VerifyUpdateHealth()
         {
-            if (!Directory.Exists(UpdatedToolDir)) return false;
+            var exePath = FindExecutablePath(UpdatedToolDir);
+            if (string.IsNullOrEmpty(exePath)) return false;
+
+            var dir = Path.GetDirectoryName(exePath)!;
 
             // Updated tool depends on common DLLs usually found in self-contained apps, 
             // but we check for at least the core binaries.
             string[] criticalFiles = {
-                "UFS2Tool.exe",
                 "UFS2Tool.dll",
                 "UFS2Tool.runtimeconfig.json"
             };
 
             foreach (var file in criticalFiles)
             {
-                if (!File.Exists(Path.Combine(UpdatedToolDir, file)))
+                if (!File.Exists(Path.Combine(dir, file)))
                 {
                     return false;
                 }
             }
 
             return true;
+        }
+
+        private static string FindExecutablePath(string rootDir)
+        {
+            if (!Directory.Exists(rootDir)) return "";
+
+            try
+            {
+                var files = Directory.GetFiles(rootDir, "UFS2Tool.exe", SearchOption.AllDirectories);
+                return files.FirstOrDefault() ?? "";
+            }
+            catch
+            {
+                return "";
+            }
         }
 
         public static bool IsUsingUpdate()

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 
 namespace Dump2UfsGui.Services
@@ -9,6 +10,8 @@ namespace Dump2UfsGui.Services
         public string? Ufs2ToolPath { get; set; }
         public string? Ufs2ToolVersion { get; set; } // Current version in use
         public string? Ufs2ToolIntegratedVersion { get; set; } = "3.0"; // Version of the bundled tool
+        public string? IgnoredUpdateVersion { get; set; } // Version the user declined or reverted from
+        public string? LatestKnownVersion { get; set; } // Latest version discovered from GitHub
         public bool IsUpdateInstalled { get; set; }
         public string? LastInputDir { get; set; }
         public string? LastOutputDir { get; set; }
@@ -24,7 +27,8 @@ namespace Dump2UfsGui.Services
 
         private static readonly string SettingsFile = Path.Combine(AppDataDir, "settings.json");
 
-        public static string BundledToolDir => Path.Combine(AppDataDir, "ufs2tool");
+        public static string InternalToolDir => Path.Combine(AppDataDir, "internal_tool", "v3.0");
+        public static string UpdatedToolDir => Path.Combine(AppDataDir, "updated_tool");
 
         public static SettingsData Load()
         {
@@ -52,26 +56,21 @@ namespace Dump2UfsGui.Services
         /// </summary>
         public static string? FindUfs2Tool(SettingsData settings)
         {
-            // 1. Bundled location (search recursively — zip may extract into subdirectory)
-            if (Directory.Exists(BundledToolDir))
-            {
-                var found = Directory.GetFiles(BundledToolDir, "UFS2Tool.exe", SearchOption.AllDirectories);
-                if (found.Length > 0) return found[0];
-            }
+            // 1. Updated tool location (search recursively)
+            var updatedPath = FindExecutablePath(UpdatedToolDir);
+            if (!string.IsNullOrEmpty(updatedPath)) return updatedPath;
 
-            // 2. Saved path
+            // 2. Internal tool location (search recursively)
+            var internalPath = FindExecutablePath(InternalToolDir);
+            if (!string.IsNullOrEmpty(internalPath)) return internalPath;
+
+            // 3. Saved custom path
             if (!string.IsNullOrEmpty(settings.Ufs2ToolPath) && File.Exists(settings.Ufs2ToolPath))
                 return settings.Ufs2ToolPath;
 
-            // 3. Current directory
+            // 4. Current directory
             var currentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UFS2Tool.exe");
             if (File.Exists(currentDir)) return currentDir;
-
-            // 4. Same directory as the exe
-            var exeDir = Path.Combine(
-                Path.GetDirectoryName(Environment.ProcessPath ?? "") ?? "",
-                "UFS2Tool.exe");
-            if (File.Exists(exeDir)) return exeDir;
 
             // 5. PATH
             var pathDirs = Environment.GetEnvironmentVariable("PATH")?.Split(';') ?? Array.Empty<string>();
@@ -86,6 +85,17 @@ namespace Dump2UfsGui.Services
             }
 
             return null;
+        }
+
+        private static string FindExecutablePath(string rootDir)
+        {
+            if (!Directory.Exists(rootDir)) return "";
+            try
+            {
+                var files = Directory.GetFiles(rootDir, "UFS2Tool.exe", SearchOption.AllDirectories);
+                return files.FirstOrDefault() ?? "";
+            }
+            catch { return ""; }
         }
     }
 }
