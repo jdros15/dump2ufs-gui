@@ -27,7 +27,14 @@ namespace Dump2UfsGui.Models
         public QueueItemStatus Status
         {
             get => _status;
-            set { _status = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsWaiting)); OnPropertyChanged(nameof(CanRemove)); }
+            set 
+            { 
+                _status = value; 
+                OnPropertyChanged(); 
+                OnPropertyChanged(nameof(IsWaiting)); 
+                OnPropertyChanged(nameof(CanRemove)); 
+                OnPropertyChanged(nameof(IsError));
+            }
         }
 
         public int Progress
@@ -44,6 +51,7 @@ namespace Dump2UfsGui.Models
 
         public bool IsWaiting => _status == QueueItemStatus.Waiting;
         public bool CanRemove => _status == QueueItemStatus.Waiting;
+        public bool IsError => _status == QueueItemStatus.Error;
 
         public event PropertyChangedEventHandler? PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string? name = null)

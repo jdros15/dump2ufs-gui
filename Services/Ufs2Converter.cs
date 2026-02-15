@@ -64,20 +64,39 @@ namespace Dump2UfsGui.Services
                 Log($"Label: {label}");
                 Log("");
 
+                long inputDirSize = 0;
+                try
+                {
+                    var files = Directory.GetFiles(inputPath, "*", SearchOption.AllDirectories);
+                    foreach (var f in files) inputDirSize += new FileInfo(f).Length;
+                    Log($"Input directory size: {FormatSize(inputDirSize)}");
+                }
+                catch { }
+
                 ReportProgress("Optimizing", "Testing block sizes for optimal space efficiency...", 5);
+
+                // For large games (> 32GB), smaller block sizes often cause UFS2Tool to run out of memory 
+                // while building the inode table (the "Memory stream is not expandable" error).
+                // We skip 4K and 8K blocks for large games to ensure stability.
+                var testableBlockSizes = new List<int>(BlockSizes);
+                if (inputDirSize > 30L * 1024 * 1024 * 1024) // > 30 GB
+                {
+                    Log("⚠️ Large game detected (> 30GB). Skipping 4K and 8K block sizes for stability.");
+                    testableBlockSizes.RemoveAll(b => b <= 8192);
+                }
 
                 BlockSizeResult? bestResult = null;
                 var tempFile = Path.Combine(Path.GetTempPath(), $"ufs2tool_test_{Guid.NewGuid():N}.img");
 
-                for (int i = 0; i < BlockSizes.Length; i++)
+                for (int i = 0; i < testableBlockSizes.Count; i++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    var b = BlockSizes[i];
+                    var b = testableBlockSizes[i];
                     var f = b / 8;
-                    var percent = 5 + (int)((i + 1) / (float)BlockSizes.Length * 50);
+                    var percent = 5 + (int)((i + 1) / (float)testableBlockSizes.Count * 50);
 
-                    ReportProgress("Optimizing", $"Testing block size {b} ({i + 1}/{BlockSizes.Length})...", percent);
+                    ReportProgress("Optimizing", $"Testing block size {b} ({i + 1}/{testableBlockSizes.Count})...", percent);
 
                     // Clean up temp file
                     if (File.Exists(tempFile))

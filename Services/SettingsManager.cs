@@ -7,7 +7,9 @@ namespace Dump2UfsGui.Services
     public class SettingsData
     {
         public string? Ufs2ToolPath { get; set; }
-        public string? Ufs2ToolVersion { get; set; }
+        public string? Ufs2ToolVersion { get; set; } // Current version in use
+        public string? Ufs2ToolIntegratedVersion { get; set; } = "3.0"; // Version of the bundled tool
+        public bool IsUpdateInstalled { get; set; }
         public string? LastInputDir { get; set; }
         public string? LastOutputDir { get; set; }
     }

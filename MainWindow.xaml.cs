@@ -1,9 +1,11 @@
 using System;
+using System.Diagnostics;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -21,6 +23,7 @@ namespace Dump2UfsGui
         private string? _ufs2ToolPath;
         private CancellationTokenSource? _cts;
         private bool _isProcessingQueue;
+        private StringBuilder _rawLog = new();
 
         // Smart log dedup
         private string _lastLogPrefix = "";
@@ -44,19 +47,53 @@ namespace Dump2UfsGui
         private void BtnMinimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
 
-        private void Window_Loaded(object sender, RoutedEventArgs e)
+        private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
             _settings = SettingsManager.Load();
-            _ufs2ToolPath = SettingsManager.FindUfs2Tool(_settings);
+
+            // Perform health check on internal tools
+            bool needsInit = !UpdateService.VerifyIntegratedToolHealth();
+
+            if (needsInit)
+            {
+                TxtStatus.Text = "Initializing internal tools...";
+                OverlaySetup.Visibility = Visibility.Visible;
+                PanelLoading.Visibility = Visibility.Visible;
+                PanelSetup.Visibility = Visibility.Collapsed;
+            }
+
+            try
+            {
+                var initTask = UpdateService.InitializeAsync();
+                
+                if (needsInit)
+                {
+                    // Ensure setup is visible for at least 800ms for UX clarity, unless it's already extracted
+                    await Task.WhenAll(initTask, Task.Delay(1000));
+                }
+                else
+                {
+                    await initTask;
+                }
+
+                _ufs2ToolPath = UpdateService.GetEffectiveToolPath();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to initialize UFS2Tool:\n{ex.Message}", "Init Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
 
             if (_ufs2ToolPath != null)
             {
-                // Path found
+                OverlaySetup.Visibility = Visibility.Collapsed;
+                RefreshToolStatus();
             }
             else
             {
-                // Show setup overlay
+                // Fallback to manual setup if internal extraction failed (unlikely)
                 OverlaySetup.Visibility = Visibility.Visible;
+                PanelLoading.Visibility = Visibility.Collapsed;
+                PanelSetup.Visibility = Visibility.Visible;
             }
 
             // Pre-fill output dir from settings
@@ -65,6 +102,12 @@ namespace Dump2UfsGui
                 TxtOutputDir.Text = _settings.LastOutputDir;
             }
 
+            // Discrete update check on launch (as soon as ready)
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(100);
+                await Dispatcher.InvokeAsync(() => CheckForUpdatesDiscreteAsync());
+            });
         }
 
         // ═══════════════════════════════════════════
@@ -595,6 +638,10 @@ namespace Dump2UfsGui
             BtnCancel.Visibility = converting ? Visibility.Visible : Visibility.Collapsed;
             BtnBrowseOutput.IsEnabled = !converting;
             TxtOutputDir.IsReadOnly = converting;
+            
+            // Disable update controls during conversion
+            BtnCheckUpdate.IsEnabled = !converting;
+            BtnUninstallUpdate.IsEnabled = !converting;
 
             if (!converting)
             {
@@ -608,6 +655,9 @@ namespace Dump2UfsGui
 
         private void AppendLog(string message)
         {
+            // Always add to raw log for full verbose output
+            _rawLog.AppendLine(message);
+
             // Smart dedup: if this line has the same prefix as the last, replace it
             var prefix = GetLogLinePrefix(message);
             if (!string.IsNullOrEmpty(prefix) && prefix == _lastLogPrefix && _lastLogLineStart >= 0)
@@ -625,6 +675,35 @@ namespace Dump2UfsGui
             TxtLog.ScrollToEnd();
         }
 
+        private void BtnCopyLog_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                System.Windows.Clipboard.SetText(_rawLog.ToString());
+                TxtStatus.Text = "Log copied to clipboard!";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to copy to clipboard: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void BtnCopyError_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button btn && btn.Tag is QueueItem item)
+            {
+                try
+                {
+                    System.Windows.Clipboard.SetText(item.StatusText);
+                    TxtStatus.Text = "Error details copied to clipboard!";
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Failed to copy: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
         /// <summary>
         /// Extracts a stable prefix from progress lines like "Adding files to image...  17% (114/376 files, 1.44 GiB/8.47 GiB)"
         /// so we can detect repeating lines that only differ in numbers.
@@ -634,6 +713,10 @@ namespace Dump2UfsGui
         {
             if (string.IsNullOrWhiteSpace(line)) return "";
             var trimmed = line.TrimStart();
+
+            // DO NOT dedup if it's an error or important warning
+            if (trimmed.StartsWith("❌") || trimmed.StartsWith("⚠") || trimmed.StartsWith("Error") || trimmed.StartsWith("=== "))
+                return "";
 
             // Match lines like "Adding files to image...", "Block XXXX:", etc.
             // Extract text up to the first number or percentage
@@ -659,6 +742,9 @@ namespace Dump2UfsGui
         private void BtnClearLog_Click(object sender, RoutedEventArgs e)
         {
             TxtLog.Clear();
+            _rawLog.Clear();
+            _lastLogPrefix = "";
+            _lastLogLineStart = -1;
         }
 
         private void BtnShowLog_Click(object sender, RoutedEventArgs e)
@@ -701,10 +787,155 @@ namespace Dump2UfsGui
                 SettingsManager.Save(_settings);
 
                 OverlaySetup.Visibility = Visibility.Collapsed;
+                PanelLoading.Visibility = Visibility.Collapsed;
+                PanelSetup.Visibility = Visibility.Collapsed;
                 AppendLog($"UFS2Tool.exe set to: {dialog.FileName}");
                 TxtStatus.Text = "Ready — drag PS5 game dump folders to add to queue";
-
+                RefreshToolStatus();
                 UpdateQueueUI();
+            }
+        }
+
+        private void BtnGetUfs2Tool_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "https://github.com/SvenGDK/UFS2Tool/releases/latest",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not open browser: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void RefreshToolStatus()
+        {
+            bool isUpdate = UpdateService.IsUsingUpdate();
+            BtnUninstallUpdate.Visibility = isUpdate ? Visibility.Visible : Visibility.Collapsed;
+            
+            if (isUpdate)
+            {
+                TxtToolVersion.Text = $"UFS2Tool {_settings.Ufs2ToolVersion?.Replace("v", "") ?? "Updated"}";
+                TxtToolVersion.Foreground = FindResource("AccentPurpleBrush") as SolidColorBrush;
+            }
+            else
+            {
+                TxtToolVersion.Text = "UFS2Tool v3.0 (Integrated)";
+                TxtToolVersion.Foreground = FindResource("TextMutedBrush") as SolidColorBrush;
+            }
+        }
+
+        private async void BtnCheckUpdate_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isProcessingQueue) return;
+            await PerformUpdateCheckAsync(false);
+        }
+
+        private async Task CheckForUpdatesDiscreteAsync()
+        {
+            // Only check if we are not busy
+            if (_isProcessingQueue) return;
+            await PerformUpdateCheckAsync(true);
+        }
+
+        private async Task PerformUpdateCheckAsync(bool isDiscrete)
+        {
+            if (_isProcessingQueue) return;
+
+            if (!isDiscrete) BtnCheckUpdate.IsEnabled = false;
+            if (!isDiscrete) TxtStatus.Text = "Checking for UFS2Tool updates...";
+
+            try
+            {
+                string currentVer = UpdateService.IsUsingUpdate() ? (_settings.Ufs2ToolVersion ?? "v3.0") : "v3.0";
+                var (hasUpdate, newVersion, downloadUrl) = await UpdateService.CheckForUpdateAsync(currentVer);
+
+                if (hasUpdate)
+                {
+                    // If discrete check, only prompt if not currently busy
+                    if (isDiscrete && _isProcessingQueue) return;
+
+                    var result = MessageBox.Show(
+                        $"A new version of UFS2Tool is available: {newVersion}\n\n" +
+                        "Do you want to download and install it? " +
+                        "(You can always revert to v3.0 later if needed.)",
+                        "Update Available", MessageBoxButton.YesNo, MessageBoxImage.Information);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        // Check again if busy before starting download
+                        if (_isProcessingQueue)
+                        {
+                            MessageBox.Show("Conversion is now in progress. Update cancelled to avoid interference.", "Update Postponed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            return;
+                        }
+
+                        TxtStatus.Text = $"Downloading UFS2Tool {newVersion}...";
+                        
+                        var progress = new Progress<double>(p => {
+                            TxtStatus.Text = $"Downloading UFS2Tool {newVersion}... {p:P0}";
+                        });
+
+                        await UpdateService.DownloadAndInstallUpdateAsync(downloadUrl, progress);
+                        
+                        _settings.Ufs2ToolVersion = newVersion;
+                        SettingsManager.Save(_settings);
+                        
+                        _ufs2ToolPath = UpdateService.GetEffectiveToolPath();
+                        RefreshToolStatus();
+                        TxtStatus.Text = $"Successfully updated to UFS2Tool {newVersion}";
+                    }
+                    else if (!isDiscrete)
+                    {
+                        TxtStatus.Text = "Update skipped.";
+                    }
+                }
+                else if (!isDiscrete)
+                {
+                    MessageBox.Show("UFS2Tool is already up to date.", "No Updates", MessageBoxButton.OK, MessageBoxImage.Information);
+                    TxtStatus.Text = "UFS2Tool is up to date.";
+                }
+            }
+            catch (Exception ex)
+            {
+                if (!isDiscrete)
+                {
+                    MessageBox.Show($"Update check failed: {ex.Message}", "Update Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    TxtStatus.Text = "Update check failed.";
+                }
+            }
+            finally
+            {
+                if (!isDiscrete) BtnCheckUpdate.IsEnabled = true;
+            }
+        }
+
+        private void BtnUninstallUpdate_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "Are you sure you want to uninstall the update and revert to the integrated UFS2Tool v3.0?",
+                "Revert Version", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                try
+                {
+                    UpdateService.UninstallUpdate();
+                    _settings.Ufs2ToolVersion = "v3.0";
+                    SettingsManager.Save(_settings);
+                    
+                    _ufs2ToolPath = UpdateService.GetEffectiveToolPath();
+                    RefreshToolStatus();
+                    TxtStatus.Text = "Reverted to integrated UFS2Tool v3.0";
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Failed to uninstall update: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
             }
         }
 

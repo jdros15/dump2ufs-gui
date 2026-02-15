@@ -11,15 +11,14 @@
         Loaded="Window_Loaded"
         Icon="pack://application:,,,/ico.png">
 
-    <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="52" GlassFrameThickness="0"
-                      ResizeBorderThickness="0" CornerRadius="12"
-                      UseAeroCaptionButtons="False"/>
-    </WindowChrome.WindowChrome>
-
     <Window.Resources>
-        <DropShadowEffect x:Key="CardGlow" Color="#7B2FFF" BlurRadius="0" ShadowDepth="0" Opacity="0"/>
-        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <ResourceDictionary>
+            <DropShadowEffect x:Key="CardGlow" Color="#7B2FFF" BlurRadius="0" ShadowDepth="0" Opacity="0"/>
+            <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+            <Style x:Key="VisibilityConverter" TargetType="FrameworkElement">
+                <!-- Helper to show/hide based on string values if needed -->
+            </Style>
+        </ResourceDictionary>
     </Window.Resources>
 
     <Border Background="{StaticResource BgDarkBrush}" 
@@ -50,15 +49,18 @@
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <Image Source="pack://application:,,,/ico.png" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality"/>
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="dump2ufs" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="dump2ufs" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                <TextBlock Text="v1.2.0" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentPurpleBrush}" 
+                                           VerticalAlignment="Bottom" Margin="6,0,0,2" Opacity="0.8"/>
+                            </StackPanel>
                             <TextBlock Text="PS5 Game Dump → .ffpkg Converter" FontSize="10" 
                                        Foreground="{StaticResource TextSecondaryBrush}" Margin="0,-1,0,0"/>
                         </StackPanel>
                     </StackPanel>
 
                 <!-- Window controls (right) -->
-                <Button Grid.Column="1" Click="BtnMinimize_Click" Focusable="False" IsTabStop="False"
-                        WindowChrome.IsHitTestVisibleInChrome="True">
+                <Button Grid.Column="1" Click="BtnMinimize_Click" Focusable="False" IsTabStop="False">
                     <Button.Style>
                         <Style TargetType="Button">
                             <Setter Property="Width" Value="46"/>
@@ -91,8 +93,7 @@
                     <TextBlock Text="─" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
                 </Button>
 
-                <Button Grid.Column="2" Click="BtnClose_Click" Focusable="False" IsTabStop="False"
-                        WindowChrome.IsHitTestVisibleInChrome="True" Margin="4,0,0,0">
+                <Button Grid.Column="2" Click="BtnClose_Click" Focusable="False" IsTabStop="False" Margin="4,0,0,0">
                     <Button.Style>
                         <Style TargetType="Button">
                             <Setter Property="Width" Value="46"/>
@@ -268,33 +269,22 @@
                                         </Border.Style>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/> <!-- Icon/Drag -->
+                                                <ColumnDefinition Width="*"/>    <!-- Text (Fill) -->
+                                                <ColumnDefinition Width="Auto"/> <!-- Buttons (Pinned Right) -->
                                             </Grid.ColumnDefinitions>
 
-                                            <!-- Drag handle -->
-                                            <TextBlock Grid.Column="0" Text="⠿" FontSize="16"
-                                                       Foreground="{StaticResource TextMutedBrush}"
-                                                       VerticalAlignment="Center" Margin="0,0,10,0"
-                                                       Cursor="SizeAll" ToolTip="Drag to reorder">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsWaiting}" Value="False">
-                                                                <Setter Property="Visibility" Value="Hidden"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
+                                            <!-- 1. LEFT: Drag handle + Icon -->
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,4,10,0">
+                                                <TextBlock Text="⠿" FontSize="16" Foreground="{StaticResource TextMutedBrush}"
+                                                           VerticalAlignment="Center" Margin="0,0,8,0" Cursor="SizeAll"
+                                                           Visibility="{Binding IsWaiting, Converter={StaticResource BoolToVis}}"/>
+                                                <TextBlock Text="🎮" FontSize="12" VerticalAlignment="Center"/>
+                                            </StackPanel>
 
-                                            <!-- Game info -->
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <!-- 2. CENTER: Game info + Error message (Wraps/Fill) -->
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Top">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBlock Text="🎮" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                                     <TextBlock Text="{Binding GameInfo.TitleName}" FontSize="12" FontWeight="SemiBold"
                                                                Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"
                                                                TextTrimming="CharacterEllipsis" MaxWidth="280"/>
@@ -302,57 +292,64 @@
                                                     <TextBlock Text="{Binding GameInfo.TitleId}" FontSize="10" 
                                                                Foreground="{StaticResource AccentPurpleBrush}" VerticalAlignment="Center"/>
                                                 </StackPanel>
-                                                <TextBlock Text="{Binding StatusText}" FontSize="10" Margin="0,2,0,0"
-                                                           TextTrimming="CharacterEllipsis">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Processing">
-                                                                    <Setter Property="Foreground" Value="{StaticResource AccentPurpleBrush}"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Done">
-                                                                    <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Error">
-                                                                    <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
+                                                
+                                                <!-- Error/Status text with ScrollViewer and MaxHeight -->
+                                                <ScrollViewer MaxHeight="80" VerticalScrollBarVisibility="Auto" Margin="0,2,10,0">
+                                                    <TextBlock Text="{Binding StatusText}" FontSize="10">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                                                                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                                                <Setter Property="TextWrapping" Value="NoWrap"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="Processing">
+                                                                        <Setter Property="Foreground" Value="{StaticResource AccentPurpleBrush}"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="Done">
+                                                                        <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="Error">
+                                                                        <Setter Property="Foreground" Value="{StaticResource AccentRedBrush}"/>
+                                                                        <Setter Property="TextTrimming" Value="None"/>
+                                                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </ScrollViewer>
                                             </StackPanel>
 
-                                            <!-- Progress (visible when processing) -->
-                                            <ProgressBar Grid.Column="2" Width="80" Height="6" Margin="8,0"
-                                                         VerticalAlignment="Center"
-                                                         Minimum="0" Maximum="100"
-                                                         Value="{Binding Progress, Mode=OneWay}">
-                                                <ProgressBar.Style>
-                                                    <Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}">
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding Status}" Value="Processing">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                    </Style>
-                                                </ProgressBar.Style>
-                                            </ProgressBar>
+                                            <!-- 3. RIGHT: Buttons / Progress -->
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,2,0,0">
+                                                <!-- Conversion Progress -->
+                                                <ProgressBar Width="60" Height="4" VerticalAlignment="Center" Margin="0,0,10,0"
+                                                             Value="{Binding Progress, Mode=OneWay}"
+                                                             Visibility="{Binding Status, Converter={StaticResource BoolToVis}, ConverterParameter=Processing}"/>
+                                                
+                                                <!-- Copy error button -->
+                                                <Button Content="Copy Details" FontSize="9" Padding="8,1" Margin="0,0,4,0"
+                                                        Click="BtnCopyError_Click" Tag="{Binding}"
+                                                        Visibility="{Binding IsError, Converter={StaticResource BoolToVis}}">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                                            <Setter Property="BorderBrush" Value="#40F85149"/>
+                                                            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
 
-                                            <!-- Remove button (only for waiting items) -->
-                                            <Button Grid.Column="3" Content="✕" FontSize="11"
-                                                    Padding="6,2" VerticalAlignment="Center"
-                                                    Click="BtnRemoveQueueItem_Click"
-                                                    Tag="{Binding}"
-                                                    Visibility="{Binding CanRemove, Converter={StaticResource BoolToVis}}">
-                                                <Button.Style>
-                                                    <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
-                                                        <Setter Property="FontSize" Value="11"/>
-                                                        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
+                                                <!-- Remove button -->
+                                                <Button Content="✕" FontSize="11" Padding="6,1"
+                                                        Click="BtnRemoveQueueItem_Click" Tag="{Binding}"
+                                                        Visibility="{Binding CanRemove, Converter={StaticResource BoolToVis}}">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                                            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                            </StackPanel>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
@@ -375,6 +372,14 @@
                             <TextBlock Text="📋 Log Output" FontSize="11" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextSecondaryBrush}" Grid.Column="0"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button x:Name="BtnCopyLog" Content="Copy Log" FontSize="10" Padding="8,3"
+                                        Click="BtnCopyLog_Click" Margin="0,0,4,0">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                            <Setter Property="FontSize" Value="10"/>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
                                 <Button x:Name="BtnToggleLog" Content="Hide" FontSize="10" Padding="8,3"
                                         Click="BtnToggleLog_Click" Margin="0,0,4,0">
                                     <Button.Style>
@@ -503,8 +508,24 @@
                 <TextBlock x:Name="TxtStatus" Grid.Column="1" FontSize="11" 
                            Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"
                            Text="Ready — drag PS5 game dump folders to add to queue"/>
-                <TextBlock Grid.Column="2" FontSize="10" Foreground="{StaticResource TextMutedBrush}" 
-                           VerticalAlignment="Center" Text="Powered by UFS2Tool by SvenGDK"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="TxtToolVersion" FontSize="10" Foreground="{StaticResource TextMutedBrush}" 
+                               VerticalAlignment="Center" Text="UFS2Tool v3.0"/>
+                    <Button x:Name="BtnCheckUpdate" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
+                            Padding="8,1" Click="BtnCheckUpdate_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔄" FontSize="10" Margin="0,0,4,0"/>
+                            <TextBlock Text="Update" FontSize="10"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="BtnUninstallUpdate" Style="{StaticResource SecondaryButton}" Margin="4,0,0,0"
+                            Padding="8,1" Click="BtnUninstallUpdate_Click" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🗑️" FontSize="10" Margin="0,0,4,0"/>
+                            <TextBlock Text="Revert to v3.0" FontSize="10"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
             </Grid>
         </Border>
 
@@ -515,18 +536,45 @@
                     MaxWidth="420" MaxHeight="300"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     BorderBrush="{StaticResource BorderDimBrush}" BorderThickness="1">
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="⚙️ Setup Required" FontSize="18" FontWeight="Bold" 
-                               HorizontalAlignment="Center" Margin="0,0,0,12"/>
-                    <TextBlock x:Name="TxtSetupMessage" TextWrapping="Wrap" TextAlignment="Center"
-                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,16"
-                               Text="UFS2Tool is required but was not found. Please locate UFS2Tool.exe on your system."/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <Button x:Name="BtnSetupBrowse" Content="Browse for UFS2Tool.exe" 
-                                Style="{StaticResource PrimaryButton}" Click="BtnSetupBrowse_Click"
-                                Padding="20,10"/>
+                <Grid VerticalAlignment="Center">
+                    <!-- 1. LOADING PANEL (Initial extraction) -->
+                    <StackPanel x:Name="PanelLoading" Visibility="Visible">
+                        <TextBlock x:Name="TxtLoadingIcon" Text="⚡" FontSize="32" HorizontalAlignment="Center" Margin="0,0,0,16">
+                            <TextBlock.RenderTransform>
+                                <RotateTransform x:Name="SpinnerTransform" Angle="0" CenterX="16" CenterY="16"/>
+                            </TextBlock.RenderTransform>
+                        </TextBlock>
+                        <TextBlock Text="Initializing System" FontSize="18" FontWeight="Bold" 
+                                   HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                        <TextBlock x:Name="TxtLoadingMessage" TextWrapping="Wrap" TextAlignment="Center"
+                                   FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,20"
+                                   Text="Setting up internal tools for the first time..."/>
+                        <ProgressBar IsIndeterminate="True" Height="4" Background="#1A1A2E" BorderThickness="0" Foreground="{StaticResource AccentPurpleBrush}"/>
                     </StackPanel>
-                </StackPanel>
+
+                    <!-- 2. SETUP PANEL (Fallback if extraction fails) -->
+                    <StackPanel x:Name="PanelSetup" Visibility="Collapsed">
+                        <TextBlock Text="⚙️ Setup Required" FontSize="18" FontWeight="Bold" 
+                                   HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                        <TextBlock x:Name="TxtSetupMessage" TextWrapping="Wrap" TextAlignment="Center"
+                                   FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,16"
+                                   Text="UFS2Tool is required but was not found. Please locate UFS2Tool.exe on your system."/>
+                        
+                        <TextBlock Text="If you don't have it, download the latest version from GitHub. Please ensure you download the 'win-x64-selfcontained.zip' file."
+                                   FontSize="11" Foreground="{StaticResource TextMutedBrush}" 
+                                   TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,16"/>
+
+                        <StackPanel HorizontalAlignment="Center">
+                            <Button x:Name="BtnSetupBrowse" Content="Locate UFS2Tool.exe" 
+                                    Style="{StaticResource PrimaryButton}" Click="BtnSetupBrowse_Click"
+                                    Padding="30,12" Margin="0,0,0,10" HorizontalAlignment="Center"/>
+                            
+                            <Button x:Name="BtnGetUfs2Tool" Content="Get UFS2Tool from GitHub" 
+                                    Style="{StaticResource SecondaryButton}" Click="BtnGetUfs2Tool_Click"
+                                    Padding="20,8" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
             </Border>
         </Border>
 

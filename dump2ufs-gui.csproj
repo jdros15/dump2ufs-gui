@@ -9,6 +9,7 @@
     <RootNamespace>Dump2UfsGui</RootNamespace>
     <AssemblyName>dump2ufs-gui</AssemblyName>
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <Version>1.2.0</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -18,6 +19,7 @@
 
   <ItemGroup>
     <Resource Include="ico.png" />
+    <EmbeddedResource Include="ufs2tool_v3.zip" />
   </ItemGroup>
 
 </Project>

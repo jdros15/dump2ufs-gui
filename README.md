@@ -1,44 +1,49 @@
 # dump2ufs-gui
 
-A simple Windows GUI wrapper for **dump2ufs**. This tool simplifies the process of converting PS5 game dumps into optimized UFS2 filesystem images (`.ffpkg`) by providing a user-friendly interface.
+A powerful, modern Windows GUI for **dump2ufs**. This application simplifies converting PS5 game dumps into optimized UFS2 filesystem images (`.ffpkg`) with a focus on ease of use and automated batch processing.
 
 ![Demo](demo.gif)
 
-## Features
+## Key Features
 
-- **Drag & Drop**: Easily drag your game dump folders directly into the application.
-- **Auto-Detection**: Automatically detects game title, ID, and generates an appropriate label.
-- **Optimization**: Tests multiple block sizes to ensure the smallest possible file size (just like the original script).
-- **Windows Only**: Built specifically for Windows users.
+- **Batch Processing**: Drag and drop multiple game folders to queue them. The app will process them sequentially while you do other things.
+- **Fully Standalone**: UFS2Tool 3.0 is integrated directly into the executable. No separate downloads or manual configuration required on first launch.
+- **Smart Update Checker**: Keep your core tool up to date. Check for the latest UFS2Tool releases from GitHub directly within the app and update with one click.
+- **Reversion System**: Easily roll back to the stable integrated v3.0 version at any time if a newer update causes issues.
+- **Self-Healing Infrastructure**: At every launch, the app performs a health check on its internal components and automatically repairs itself if files are missing or corrupted.
+- **Auto-Detection**: Automatically parses game metadata (Title Name, Title ID, Version) to generate optimized labels and filenames.
+- **Optimization**: Efficiently calculates the best block sizes to produce the smallest possible `.ffpkg` images.
 
-> ⚠️ **This tool only accepts extracted (foldered) PS5 game dumps.** Compressed archives (`.rar`, `.zip`, `.7z`, etc.) are **not** supported — please extract your dump first.
+> ⚠️ **Prerequisite**: This tool requires extracted (foldered) PS5 game dumps. Compressed archives (`.rar`, `.zip`, `.7z`, etc.) are **not** supported — please extract your dump first.
 
 ## Usage
 
-1. **Download** the latest release.
-2. **Run** `dump2ufs-gui.exe`.
-3. **Drag and drop** your PS5 game folder into the window.
-4. **Click "Convert"** and wait for the process to finish.
+1. **Launch**: Run `dump2ufs-gui.exe`. On the first run, it will automatically initialize its internal tools.
+2. **Queue Games**: Drag and drop one or more PS5 game folders into the main window.
+3. **Configure Output**: (Optional) Set your preferred output directory.
+4. **Convert**: Click the "Convert" button. You can monitor progress and logs in the side panel.
+5. **Manage Tools**: Use the version display in the bottom-right to check for updates or revert versions.
 
 ## Building from Source
 
-To build the compressed, single-file executable yourself:
+To build the compressed, single-file executable:
 
-1. Ensure you have the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) installed.
-2. Clone the repository and navigate to the project folder.
+1. Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+2. Clone the repository.
 3. Run the following command:
 
 ```powershell
 dotnet publish -c Release
 ```
 
-The output executable will be located at:  
-`bin\Release\net8.0-windows\win-x64\publish\dump2ufs-gui.exe`
+The standalone executable will be generated at:  
+`bin/Release/net8.0-windows/win-x64/publish/dump2ufs-gui.exe`
 
 ## Credits
 
-- **JD Ros**: GUI Implementation.
-- **dump2ufs**: The core logic and methodology behind the conversion.
-- **SvenGDK**: For [UFS2Tool](https://github.com/SvenGDK/UFS2Tool), which powers the filesystem creation.
+- **JD Ros**: GUI Architecture and Implementation.
+- **dump2ufs**: Core conversion logic.
+- **SvenGDK**: For [UFS2Tool](https://github.com/SvenGDK/UFS2Tool), the engine powering the filesystem creation.
 
-> **Note**: This tool acts as a frontend. All conversion logic handles by `dump2ufs` behind the scenes.
+---
+*Disclaimer: This tool is a GUI wrapper for established community tools. I am only responsible for the frontend and automation logic.*

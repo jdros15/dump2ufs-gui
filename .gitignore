@@ -1,0 +1,46 @@
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa]rm/
+[Aa]rm64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Vv]isualStudioToolsSDK/
+
+# Visual Studio 2015/2017 cache/options directory
+.vs/
+# Uncomment if you have tasks that create the TestResults folder
+#TestResults/
+
+# VS Code
+.vscode/
+
+# Project files
+*.user
+*.userosscache
+*.sln.docstates
+
+# Publishing
+publish/
+*.pubxml
+*.pfx
+*.publishsettings
+
+# Other
+.DS_Store
+*.swp
+*.bak
+*~
