@@ -130,7 +130,11 @@ namespace Dump2UfsGui
             _ = Task.Run(async () =>
             {
                 await Task.Delay(100);
-                await Dispatcher.InvokeAsync(() => CheckForUpdatesDiscreteAsync());
+                await Dispatcher.InvokeAsync(() => 
+                {
+                    _ = CheckForUpdatesDiscreteAsync();
+                    UpdateQueueUI(); // Ensure button text and UI state match settings at launch
+                });
             });
         }
 

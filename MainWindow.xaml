@@ -445,7 +445,8 @@
                         <TextBlock Text="Format:" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"
                                    Foreground="{StaticResource TextSecondaryBrush}"/>
                         <ComboBox x:Name="ComboFormat" Width="140" Height="28" VerticalContentAlignment="Center"
-                                  SelectionChanged="ComboFormat_SelectionChanged" Margin="0,0,20,0">
+                                  SelectionChanged="ComboFormat_SelectionChanged" Margin="0,0,20,0"
+                                  SelectedIndex="0">
                             <ComboBoxItem Content="Fake PKG (.ffpkg)" Tag="ffpkg"/>
                             <ComboBoxItem Content="PFS Image (.img)" Tag="img"/>
                         </ComboBox>
