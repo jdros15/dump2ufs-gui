@@ -295,20 +295,6 @@ namespace Dump2UfsGui
             TxtOutputDir.IsReadOnly = _isProcessingQueue;
             BtnCheckUpdate.IsEnabled = !_isProcessingQueue;
             BtnUninstallUpdate.IsEnabled = !_isProcessingQueue;
-
-            // Global progress calculation
-            if (_isProcessingQueue && totalCount > 0)
-            {
-                MainProgress.Visibility = Visibility.Visible;
-                var currentItem = _queue.FirstOrDefault(q => q.Status == QueueItemStatus.Processing);
-                double progressVal = (doneCount * 100.0) + (currentItem?.Progress ?? 0);
-                MainProgress.Maximum = totalCount * 100.0;
-                MainProgress.Value = progressVal;
-            }
-            else
-            {
-                MainProgress.Visibility = Visibility.Collapsed;
-            }
         }
 
         private void BtnRemoveQueueItem_Click(object sender, RoutedEventArgs e)
@@ -340,20 +326,32 @@ namespace Dump2UfsGui
 
         private void BtnBrowseInput_Click(object sender, RoutedEventArgs e)
         {
-            using var dialog = new FolderBrowserDialog
+            var dialog = new Microsoft.Win32.OpenFolderDialog
             {
-                Description = "Select PS5 Game Dump Folder",
-                UseDescriptionForTitle = true,
-                ShowNewFolderButton = false
+                Title = "Select PS5 Game Dump Folder(s)",
+                Multiselect = true
             };
 
             if (!string.IsNullOrEmpty(_settings.LastInputDir) && Directory.Exists(_settings.LastInputDir))
                 dialog.InitialDirectory = _settings.LastInputDir;
 
-            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            if (dialog.ShowDialog() == true)
             {
-                _settings.LastInputDir = Path.GetDirectoryName(dialog.SelectedPath);
-                AddToQueue(dialog.SelectedPath);
+                // dialog.FolderName is the first selected folder
+                _settings.LastInputDir = Path.GetDirectoryName(dialog.FolderName);
+                
+                int added = 0;
+                foreach (var folder in dialog.FolderNames)
+                {
+                    var countBefore = _queue.Count;
+                    AddToQueue(folder);
+                    if (_queue.Count > countBefore) added++;
+                }
+
+                if (added > 1)
+                {
+                    TxtStatus.Text = $"Added {added} games to queue";
+                }
             }
         }
 
@@ -542,10 +540,9 @@ namespace Dump2UfsGui
 
         private void BtnBrowseOutput_Click(object sender, RoutedEventArgs e)
         {
-            using var dialog = new FolderBrowserDialog
+            var dialog = new Microsoft.Win32.OpenFolderDialog
             {
-                Description = "Select Output Directory for .ffpkg Files",
-                UseDescriptionForTitle = true
+                Title = "Select Output Directory for .ffpkg Files"
             };
 
             if (!string.IsNullOrEmpty(TxtOutputDir.Text) && Directory.Exists(TxtOutputDir.Text))
@@ -553,10 +550,10 @@ namespace Dump2UfsGui
             else if (!string.IsNullOrEmpty(_settings.LastOutputDir) && Directory.Exists(_settings.LastOutputDir))
                 dialog.InitialDirectory = _settings.LastOutputDir;
 
-            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            if (dialog.ShowDialog() == true)
             {
-                TxtOutputDir.Text = dialog.SelectedPath;
-                _settings.LastOutputDir = dialog.SelectedPath;
+                TxtOutputDir.Text = dialog.FolderName;
+                _settings.LastOutputDir = dialog.FolderName;
 
                 // Update output paths for all waiting items
                 var extension = _settings.OutputFormat == "img" ? ".img" : ".ffpkg";
@@ -565,7 +562,7 @@ namespace Dump2UfsGui
                     var baseName = _settings.OutputFormat == "img" 
                         ? Path.GetFileName(item.InputPath) 
                         : item.GameInfo.TitleId;
-                    item.OutputPath = Path.Combine(dialog.SelectedPath, baseName + extension);
+                    item.OutputPath = Path.Combine(dialog.FolderName, baseName + extension);
                 }
             }
         }
@@ -717,7 +714,6 @@ namespace Dump2UfsGui
                             {
                                 nextItem.Progress = p.PercentComplete;
                                 nextItem.StatusText = $"{p.Stage}: {p.Detail}";
-                                UpdateQueueUI();
                             });
                         };
 

@@ -233,10 +233,6 @@
                             </Button>
                         </Grid>
 
-                        <!-- Bottom progress bar (Global) -->
-                        <ProgressBar x:Name="MainProgress" DockPanel.Dock="Bottom" Height="3" 
-                                     Background="#111122" BorderThickness="0" Foreground="{StaticResource AccentPurpleBrush}"
-                                     Margin="0,8,0,0" Visibility="Collapsed"/>
 
                         <!-- Queue items -->
                         <ListBox x:Name="QueueListBox" Background="Transparent" BorderThickness="0"
@@ -327,19 +323,10 @@
                                                 <TextBlock Text="⠿" FontSize="16" Foreground="{StaticResource TextMutedBrush}"
                                                             VerticalAlignment="Center" Margin="0,0,8,0" Cursor="SizeAll"
                                                             Visibility="{Binding IsWaiting, Converter={StaticResource BoolToVis}}"/>
-                                                <Grid VerticalAlignment="Center">
-                                                    <TextBlock x:Name="IconGame" Text="🎮" FontSize="12">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding Status}" Value="{x:Static models:QueueItemStatus.Processing}">
-                                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
-                                                    <TextBlock x:Name="IconBusy" Text="⚙️" FontSize="12" Visibility="Collapsed"
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock x:Name="IconGame" Text="🎮" FontSize="12" VerticalAlignment="Center"/>
+                                                    <TextBlock x:Name="IconBusy" Text="⚙️" FontSize="11" Margin="2,0,0,0"
+                                                               VerticalAlignment="Center" Visibility="Collapsed"
                                                                RenderTransformOrigin="0.5,0.5">
                                                         <TextBlock.RenderTransform>
                                                             <RotateTransform Angle="0"/>
@@ -365,7 +352,7 @@
                                                             </Style>
                                                         </TextBlock.Style>
                                                     </TextBlock>
-                                                </Grid>
+                                                </StackPanel>
                                             </StackPanel>
 
                                             <!-- 2. CENTER: Game info + Error message (Wraps/Fill) -->
@@ -412,47 +399,85 @@
                                             </StackPanel>
 
                                             <!-- 3. PROGRESS BAR (Full width row 1) -->
-                                            <Grid Grid.Row="1" Grid.Column="1" Margin="0,6,10,2"
-                                                  Visibility="{Binding Status, Converter={StaticResource BoolToVis}, ConverterParameter=Processing}">
+                                            <Grid Grid.Row="1" Grid.Column="1" Margin="0,6,10,2">
+                                                <Grid.Style>
+                                                    <Style TargetType="Grid">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsProcessing}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Grid.Style>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="35"/>
                                                 </Grid.ColumnDefinitions>
                                                 
-                                                <Grid Grid.Column="0">
-                                                    <ProgressBar x:Name="ItemProgress" Height="6" Background="#1A1A2E" BorderThickness="0"
-                                                                 Foreground="{StaticResource AccentPurpleBrush}"
-                                                                 Value="{Binding Progress, Mode=OneWay}"/>
-                                                    <Border x:Name="Shimmer" Background="{StaticResource ShimmerBrush}"
-                                                            RenderTransformOrigin="0.5,0.5">
-                                                        <Border.RenderTransform>
-                                                            <TranslateTransform X="-300"/>
-                                                        </Border.RenderTransform>
-                                                        <Border.Style>
-                                                            <Style TargetType="Border">
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding Status}" Value="{x:Static models:QueueItemStatus.Processing}">
-                                                                        <DataTrigger.EnterActions>
-                                                                            <BeginStoryboard x:Name="DoShimmer">
-                                                                                <Storyboard RepeatBehavior="Forever">
-                                                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
-                                                                                                     From="-300" To="300" Duration="0:0:1.5"/>
-                                                                                </Storyboard>
-                                                                            </BeginStoryboard>
-                                                                        </DataTrigger.EnterActions>
-                                                                        <DataTrigger.ExitActions>
-                                                                            <StopStoryboard BeginStoryboardName="DoShimmer"/>
-                                                                        </DataTrigger.ExitActions>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Border.Style>
-                                                    </Border>
-                                                </Grid>
+                                                <Border Grid.Column="0" Height="6" CornerRadius="3" ClipToBounds="True" Background="#1A1A2E">
+                                                    <Grid>
+                                                        <ProgressBar x:Name="ItemProgress" Height="6" Background="Transparent" BorderThickness="0"
+                                                                     Value="{Binding Progress, Mode=OneWay}">
+                                                            <ProgressBar.Style>
+                                                                <Style TargetType="ProgressBar">
+                                                                    <Setter Property="Foreground" Value="{StaticResource AccentPurpleBrush}"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ProgressBar.Style>
+                                                        </ProgressBar>
+                                                        
+                                                        <Border x:Name="Shimmer" Background="{StaticResource ShimmerBrush}"
+                                                                RenderTransformOrigin="0.5,0.5" IsHitTestVisible="False">
+                                                            <Border.RenderTransform>
+                                                                <TranslateTransform X="-300"/>
+                                                            </Border.RenderTransform>
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Status}" Value="{x:Static models:QueueItemStatus.Processing}">
+                                                                            <DataTrigger.EnterActions>
+                                                                                <BeginStoryboard x:Name="DoShimmer">
+                                                                                    <Storyboard RepeatBehavior="Forever">
+                                                                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                                                                                         From="-300" To="300" Duration="0:0:1.5"/>
+                                                                                    </Storyboard>
+                                                                                </BeginStoryboard>
+                                                                            </DataTrigger.EnterActions>
+                                                                            <DataTrigger.ExitActions>
+                                                                                <StopStoryboard BeginStoryboardName="DoShimmer"/>
+                                                                            </DataTrigger.ExitActions>
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                        </Border>
+                                                    </Grid>
+                                                </Border>
 
                                                 <TextBlock Grid.Column="1" Text="{Binding Progress, StringFormat='{}{0}%'}" 
-                                                           FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource AccentPurpleBrush}"
-                                                           VerticalAlignment="Center" HorizontalAlignment="Right" Margin="4,0,0,0"/>
+                                                           FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="4,0,0,0">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{StaticResource AccentPurpleBrush}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{StaticResource AccentGreenBrush}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
                                             </Grid>
 
                                             <!-- 4. RIGHT: Buttons -->

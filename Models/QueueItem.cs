@@ -34,6 +34,8 @@ namespace Dump2UfsGui.Models
                 OnPropertyChanged(nameof(IsWaiting)); 
                 OnPropertyChanged(nameof(CanRemove)); 
                 OnPropertyChanged(nameof(IsError));
+                OnPropertyChanged(nameof(IsProcessing));
+                OnPropertyChanged(nameof(IsDone));
             }
         }
 
@@ -52,6 +54,8 @@ namespace Dump2UfsGui.Models
         public bool IsWaiting => _status == QueueItemStatus.Waiting;
         public bool CanRemove => _status == QueueItemStatus.Waiting;
         public bool IsError => _status == QueueItemStatus.Error;
+        public bool IsProcessing => _status == QueueItemStatus.Processing;
+        public bool IsDone => _status == QueueItemStatus.Done;
 
         public event PropertyChangedEventHandler? PropertyChanged;
         protected void OnPropertyChanged([CallerMemberName] string? name = null)

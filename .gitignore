@@ -44,3 +44,5 @@ publish/
 *.swp
 *.bak
 *~
+build_output.txt
+build_error.json
