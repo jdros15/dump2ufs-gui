@@ -12,7 +12,9 @@ A powerful, modern Windows GUI for **dump2ufs**. This application simplifies con
 - **Reversion System**: Easily roll back to the stable integrated v3.0 version at any time if a newer update causes issues.
 - **Self-Healing Infrastructure**: At every launch, the app performs a health check on its internal components and automatically repairs itself if files are missing or corrupted.
 - **Auto-Detection**: Automatically parses game metadata (Title Name, Title ID, Version) to generate optimized labels and filenames.
-- **Optimization**: Efficiently calculates the best block sizes to produce the smallest possible `.ffpkg` images.
+- **Optimization**: Efficiently calculates the best block sizes to produce the smallest possible images.
+- **Output Flexibility**: Support for both Fake PKGs (`.ffpkg`) and raw PFS Images (`.img`).
+- **Dump Installer Compatibility**: Optional one-click wrapping for EchoStretch's [Dump Installer](https://github.com/EchoStretch/dump_installer), including automated `sce_sys` metadata injection.
 
 > ⚠️ **Prerequisite**: This tool requires extracted (foldered) PS5 game dumps. Compressed archives (`.rar`, `.zip`, `.7z`, etc.) are **not** supported — please extract your dump first.
 
@@ -38,6 +40,12 @@ dotnet publish -c Release
 
 The standalone executable will be generated at:  
 `bin/Release/net8.0-windows/win-x64/publish/dump2ufs-gui.exe`
+
+## ⚓ EchoStretch's Dump Installer Compatibility
+
+The "Dump Installer Compatible" toggle prepares your `.ffpkg` files specifically for use with EchoStretch's [Dump Installer](https://github.com/EchoStretch/dump_installer). This feature automatically bundles the required `sce_sys` metadata into a compatibility trailer at the end of the file.
+
+**Setup**: To use this feature effectively, you must configure your PS5 environment according to the instructions provided in the [Dump Installer repository](https://github.com/EchoStretch/dump_installer).
 
 ## Credits
 
