@@ -414,34 +414,45 @@
                                             <!-- 3. PROGRESS BAR (Full width row 1) -->
                                             <Grid Grid.Row="1" Grid.Column="1" Margin="0,6,10,2"
                                                   Visibility="{Binding Status, Converter={StaticResource BoolToVis}, ConverterParameter=Processing}">
-                                                <ProgressBar x:Name="ItemProgress" Height="6" Background="#1A1A2E" BorderThickness="0"
-                                                             Foreground="{StaticResource AccentPurpleBrush}"
-                                                             Value="{Binding Progress, Mode=OneWay}"/>
-                                                <Border x:Name="Shimmer" Background="{StaticResource ShimmerBrush}"
-                                                        RenderTransformOrigin="0.5,0.5">
-                                                    <Border.RenderTransform>
-                                                        <TranslateTransform X="-300"/>
-                                                    </Border.RenderTransform>
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Status}" Value="{x:Static models:QueueItemStatus.Processing}">
-                                                                    <DataTrigger.EnterActions>
-                                                                        <BeginStoryboard x:Name="DoShimmer">
-                                                                            <Storyboard RepeatBehavior="Forever">
-                                                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
-                                                                                                 From="-300" To="300" Duration="0:0:1.5"/>
-                                                                            </Storyboard>
-                                                                        </BeginStoryboard>
-                                                                    </DataTrigger.EnterActions>
-                                                                    <DataTrigger.ExitActions>
-                                                                        <StopStoryboard BeginStoryboardName="DoShimmer"/>
-                                                                    </DataTrigger.ExitActions>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                </Border>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="35"/>
+                                                </Grid.ColumnDefinitions>
+                                                
+                                                <Grid Grid.Column="0">
+                                                    <ProgressBar x:Name="ItemProgress" Height="6" Background="#1A1A2E" BorderThickness="0"
+                                                                 Foreground="{StaticResource AccentPurpleBrush}"
+                                                                 Value="{Binding Progress, Mode=OneWay}"/>
+                                                    <Border x:Name="Shimmer" Background="{StaticResource ShimmerBrush}"
+                                                            RenderTransformOrigin="0.5,0.5">
+                                                        <Border.RenderTransform>
+                                                            <TranslateTransform X="-300"/>
+                                                        </Border.RenderTransform>
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="{x:Static models:QueueItemStatus.Processing}">
+                                                                        <DataTrigger.EnterActions>
+                                                                            <BeginStoryboard x:Name="DoShimmer">
+                                                                                <Storyboard RepeatBehavior="Forever">
+                                                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                                                                                     From="-300" To="300" Duration="0:0:1.5"/>
+                                                                                </Storyboard>
+                                                                            </BeginStoryboard>
+                                                                        </DataTrigger.EnterActions>
+                                                                        <DataTrigger.ExitActions>
+                                                                            <StopStoryboard BeginStoryboardName="DoShimmer"/>
+                                                                        </DataTrigger.ExitActions>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                    </Border>
+                                                </Grid>
+
+                                                <TextBlock Grid.Column="1" Text="{Binding Progress, StringFormat='{}{0}%'}" 
+                                                           FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource AccentPurpleBrush}"
+                                                           VerticalAlignment="Center" HorizontalAlignment="Right" Margin="4,0,0,0"/>
                                             </Grid>
 
                                             <!-- 4. RIGHT: Buttons -->

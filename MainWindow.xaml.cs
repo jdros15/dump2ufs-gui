@@ -717,6 +717,7 @@ namespace Dump2UfsGui
                             {
                                 nextItem.Progress = p.PercentComplete;
                                 nextItem.StatusText = $"{p.Stage}: {p.Detail}";
+                                UpdateQueueUI();
                             });
                         };
 

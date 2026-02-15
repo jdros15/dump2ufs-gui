@@ -103,9 +103,11 @@ namespace Dump2UfsGui.Services
 
                     var b = testableBlockSizes[i];
                     var f = b / 8;
-                    var percent = 5 + (int)((i + 1) / (float)testableBlockSizes.Count * 50);
+                    
+                    var startPercent = 5 + (int)(i / (float)testableBlockSizes.Count * 50);
+                    var endPercent = 5 + (int)((i + 0.8) / (float)testableBlockSizes.Count * 50);
 
-                    ReportProgress("Optimizing", $"Testing block size {b} ({i + 1}/{testableBlockSizes.Count})...", percent);
+                    ReportProgress("Optimizing", $"Testing block size {b} ({i + 1}/{testableBlockSizes.Count})...", startPercent);
 
                     // Clean up temp file
                     if (File.Exists(tempFile))
@@ -113,6 +115,8 @@ namespace Dump2UfsGui.Services
 
                     var args = $"makefs -b 0 -o bsize={b},fsize={f},minfree=0,version=2,optimization=space -s {b} \"{tempFile}\" \"{inputPath}\"";
                     var output = await RunUfs2ToolAsync(args, cancellationToken);
+                    
+                    ReportProgress("Optimizing", $"Finished testing block size {b}...", endPercent);
 
                     // Try to parse image size from output
                     // UFS2Tool format variations: 
@@ -350,12 +354,12 @@ namespace Dump2UfsGui.Services
                 // Pulse progress while running
                 _ = Task.Run(async () =>
                 {
-                    int p = 65;
+                    int p = 60;
                     while (!process.HasExited && !ct.IsCancellationRequested)
                     {
-                        ReportProgress("Creating", "Writing UFS2 filesystem image...", Math.Min(p, 95));
-                        p += 2;
-                        try { await Task.Delay(500, ct).ConfigureAwait(false); } catch { break; }
+                        ReportProgress("Creating", "Writing UFS2 filesystem image...", Math.Min(p, 98));
+                        p += 1;
+                        try { await Task.Delay(300, ct).ConfigureAwait(false); } catch { break; }
                     }
                 }, ct);
 
