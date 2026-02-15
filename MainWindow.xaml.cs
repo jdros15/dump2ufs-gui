@@ -774,17 +774,34 @@ namespace Dump2UfsGui
                 if (!_cts.Token.IsCancellationRequested)
                 {
                     TxtStatus.Text = $"✅ Queue complete — {completed} succeeded, {failed} failed";
-                    if (completed > 0 && failed == 0)
+                    
+                    if (completed + failed > 0)
                     {
-                        MessageBox.Show(
-                            $"All {completed} game{(completed == 1 ? "" : "s")} converted successfully!",
-                            "Queue Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-                    }
-                    else if (completed > 0)
-                    {
-                        MessageBox.Show(
-                            $"{completed} succeeded, {failed} failed.\nCheck the log for details.",
-                            "Queue Complete", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        if (failed == 0)
+                        {
+                            TxtCompleteIcon.Text = "✅";
+                            TxtCompleteIcon.Foreground = FindResource("AccentGreenBrush") as SolidColorBrush;
+                            TxtCompleteTitle.Text = "Queue Complete";
+                            TxtCompleteSummary.Text = $"All {completed} game{(completed == 1 ? "" : "s")} converted successfully!";
+                            System.Media.SystemSounds.Asterisk.Play();
+                        }
+                        else if (completed == 0)
+                        {
+                            TxtCompleteIcon.Text = "❌";
+                            TxtCompleteIcon.Foreground = FindResource("AccentRedBrush") as SolidColorBrush;
+                            TxtCompleteTitle.Text = "Conversion Failed";
+                            TxtCompleteSummary.Text = $"All {failed} attempt{(failed == 1 ? "" : "s")} failed.\nCheck the log for details.";
+                            System.Media.SystemSounds.Hand.Play();
+                        }
+                        else
+                        {
+                            TxtCompleteIcon.Text = "⚠️";
+                            TxtCompleteIcon.Foreground = FindResource("AccentOrangeBrush") as SolidColorBrush;
+                            TxtCompleteTitle.Text = "Queue Complete";
+                            TxtCompleteSummary.Text = $"{completed} succeeded, {failed} failed.\nCheck the log for details.";
+                            System.Media.SystemSounds.Exclamation.Play();
+                        }
+                        OverlayComplete.Visibility = Visibility.Visible;
                     }
                 }
                 else
@@ -1114,6 +1131,35 @@ namespace Dump2UfsGui
             }
         }
 
+        // ═══════════════════════════════════════════
+        // COMPLETION OVERLAY
+        // ═══════════════════════════════════════════
+
+        private void BtnOpenOutput_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var path = TxtOutputDir.Text;
+                if (Directory.Exists(path))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = path,
+                        UseShellExecute = true,
+                        Verb = "open"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"❌ Failed to open output folder: {ex.Message}");
+            }
+        }
+
+        private void BtnCompleteDone_Click(object sender, RoutedEventArgs e)
+        {
+            OverlayComplete.Visibility = Visibility.Collapsed;
+        }
 
     }
 }
