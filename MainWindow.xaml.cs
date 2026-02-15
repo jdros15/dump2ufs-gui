@@ -24,6 +24,7 @@ namespace Dump2UfsGui
         private string? _ufs2ToolPath;
         private CancellationTokenSource? _cts;
         private bool _isProcessingQueue;
+        private bool _isCancelling;
         private StringBuilder _rawLog = new();
 
         // Smart log dedup
@@ -54,8 +55,48 @@ namespace Dump2UfsGui
         private void BtnMinimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
 
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            if (_isProcessingQueue)
+            {
+                var result = MessageBox.Show(
+                    "A conversion is currently in progress. Are you sure you want to exit?\n\nThe current process will be terminated and incomplete files will be deleted.",
+                    "Exit Application", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                
+                if (result != MessageBoxResult.Yes)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+            }
+
+            // Signal cancellation to all running tasks
+            _cts?.Cancel();
+            
+            base.OnClosing(e);
+        }
+
+        // ═══════════════════════════════════════════
+        // STARTUP CLEANUP
+        // ═══════════════════════════════════════════
+
+        private void CleanupOrphanedTools()
+        {
+            try
+            {
+                var orphans = Process.GetProcessesByName("UFS2Tool");
+                foreach (var p in orphans)
+                {
+                    try { p.Kill(true); }
+                    catch { /* Ignore if already gone */ }
+                }
+            }
+            catch { /* System error getting processes */ }
+        }
+
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            CleanupOrphanedTools();
             _settings = SettingsManager.Load();
 
             // Perform health check on internal tools
@@ -208,24 +249,66 @@ namespace Dump2UfsGui
             var totalCount = _queue.Count;
             var doneCount = _queue.Count(q => q.Status == QueueItemStatus.Done);
 
+            // Visibility of status indicators
+            BtnCancel.Visibility = _isProcessingQueue ? Visibility.Visible : Visibility.Collapsed;
+            BtnConvert.Visibility = _isProcessingQueue ? Visibility.Collapsed : Visibility.Visible;
+            IconStatusBusy.Visibility = _isProcessingQueue ? Visibility.Visible : Visibility.Collapsed;
+            CheckExperimentalFfpkg.Visibility = _settings?.OutputFormat == "ffpkg" ? Visibility.Visible : Visibility.Collapsed;
+
+            // Handle Cancelling state
+            if (_isCancelling)
+            {
+                BtnCancel.IsEnabled = false;
+                TxtCancelButton.Text = "Cancelling...";
+                BtnCancel.Opacity = 0.7;
+            }
+            else
+            {
+                BtnCancel.IsEnabled = true;
+                TxtCancelButton.Text = "Cancel";
+                BtnCancel.Opacity = 1.0;
+            }
+
+            // Update queue header counts
             if (_isProcessingQueue)
             {
                 TxtQueueCount.Text = $"({doneCount}/{totalCount} done)";
+                TxtConvertButton.Text = "Processing Queue...";
             }
             else if (totalCount > 0)
             {
                 TxtQueueCount.Text = $"({totalCount} game{(totalCount == 1 ? "" : "s")})";
+                var formatExt = (_settings?.OutputFormat ?? "ffpkg") == "img" ? ".img" : ".ffpkg";
+                TxtConvertButton.Text = waitingCount > 1
+                    ? $"Convert {waitingCount} Games to {formatExt}"
+                    : $"Convert to {formatExt}";
             }
             else
             {
                 TxtQueueCount.Text = "";
+                TxtConvertButton.Text = $"Convert to .{_settings?.OutputFormat ?? "ffpkg"}";
             }
 
-            var formatExt = _settings.OutputFormat == "img" ? ".img" : ".ffpkg";
+            // Master enable/disable
             BtnConvert.IsEnabled = waitingCount > 0 && _ufs2ToolPath != null && !_isProcessingQueue;
-            TxtConvertButton.Text = waitingCount > 1
-                ? $"Convert {waitingCount} Games to {formatExt}"
-                : $"Convert to {formatExt}";
+            BtnBrowseOutput.IsEnabled = !_isProcessingQueue;
+            TxtOutputDir.IsReadOnly = _isProcessingQueue;
+            BtnCheckUpdate.IsEnabled = !_isProcessingQueue;
+            BtnUninstallUpdate.IsEnabled = !_isProcessingQueue;
+
+            // Global progress calculation
+            if (_isProcessingQueue && totalCount > 0)
+            {
+                MainProgress.Visibility = Visibility.Visible;
+                var currentItem = _queue.FirstOrDefault(q => q.Status == QueueItemStatus.Processing);
+                double progressVal = (doneCount * 100.0) + (currentItem?.Progress ?? 0);
+                MainProgress.Maximum = totalCount * 100.0;
+                MainProgress.Value = progressVal;
+            }
+            else
+            {
+                MainProgress.Visibility = Visibility.Collapsed;
+            }
         }
 
         private void BtnRemoveQueueItem_Click(object sender, RoutedEventArgs e)
@@ -593,7 +676,7 @@ namespace Dump2UfsGui
 
             _isProcessingQueue = true;
             _cts = new CancellationTokenSource();
-            SetConvertingState(true);
+            UpdateQueueUI();
             PanelLog.Visibility = Visibility.Visible;
             LogColumn.Width = new GridLength(1, GridUnitType.Star);
 
@@ -715,42 +798,33 @@ namespace Dump2UfsGui
             finally
             {
                 _isProcessingQueue = false;
+                _isCancelling = false;
                 _cts?.Dispose();
                 _cts = null;
-                SetConvertingState(false);
+                UpdateQueueUI();
                 SettingsManager.Save(_settings);
             }
         }
 
         private void BtnCancel_Click(object sender, RoutedEventArgs e)
         {
+            if (_isCancelling) return;
+
             var result = MessageBox.Show(
                 "Are you sure you want to cancel the current conversion?\n\nThe current item will be stopped and remaining items will be skipped.",
                 "Cancel Conversion", MessageBoxButton.YesNo, MessageBoxImage.Question);
 
             if (result == MessageBoxResult.Yes)
             {
+                _isCancelling = true;
+                UpdateQueueUI();
                 _cts?.Cancel();
             }
         }
 
-        private void SetConvertingState(bool converting)
-        {
-            BtnConvert.IsEnabled = !converting;
-            BtnConvert.Visibility = converting ? Visibility.Collapsed : Visibility.Visible;
-            BtnCancel.Visibility = converting ? Visibility.Visible : Visibility.Collapsed;
-            BtnBrowseOutput.IsEnabled = !converting;
-            TxtOutputDir.IsReadOnly = converting;
-            
-            // Disable update controls during conversion
-            BtnCheckUpdate.IsEnabled = !converting;
-            BtnUninstallUpdate.IsEnabled = !converting;
 
-            if (!converting)
-            {
-                BtnConvert.IsEnabled = _queue.Any(q => q.Status == QueueItemStatus.Waiting) && _ufs2ToolPath != null;
-            }
-        }
+
+
 
         // ═══════════════════════════════════════════
         // LOG
@@ -817,11 +891,12 @@ namespace Dump2UfsGui
             if (string.IsNullOrWhiteSpace(line)) return "";
             var trimmed = line.TrimStart();
 
-            // DO NOT dedup if it's an error or important warning
-            if (trimmed.StartsWith("❌") || trimmed.StartsWith("⚠") || trimmed.StartsWith("Error") || trimmed.StartsWith("=== "))
+            // DO NOT dedup if it's an error, important warning, or block size test
+            if (trimmed.StartsWith("❌") || trimmed.StartsWith("⚠") || trimmed.StartsWith("Error") || 
+                trimmed.StartsWith("=== ") || trimmed.StartsWith("Block"))
                 return "";
 
-            // Match lines like "Adding files to image...", "Block XXXX:", etc.
+            // Match lines like "Adding files to image...", etc.
             // Extract text up to the first number or percentage
             int firstDigit = -1;
             for (int i = 0; i < trimmed.Length; i++)

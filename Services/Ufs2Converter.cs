@@ -66,11 +66,18 @@ namespace Dump2UfsGui.Services
                 Log($"Label: {label}");
                 Log("");
 
+                ReportProgress("Optimizing", "Scanning source directory...", 2);
+
                 long inputDirSize = 0;
                 try
                 {
-                    var files = Directory.GetFiles(inputPath, "*", SearchOption.AllDirectories);
-                    foreach (var f in files) inputDirSize += new FileInfo(f).Length;
+                    inputDirSize = await Task.Run(() =>
+                    {
+                        long size = 0;
+                        var files = Directory.GetFiles(inputPath, "*", SearchOption.AllDirectories);
+                        foreach (var f in files) size += new FileInfo(f).Length;
+                        return size;
+                    }, cancellationToken);
                     Log($"Input directory size: {FormatSize(inputDirSize)}");
                 }
                 catch { }
@@ -108,20 +115,21 @@ namespace Dump2UfsGui.Services
                     var output = await RunUfs2ToolAsync(args, cancellationToken);
 
                     // Try to parse image size from output
-                    // UFS2Tool format: "Image size (6 833 565 696 bytes)" with non-breaking spaces
-                    var sizeMatch = Regex.Match(output, @"Image size \(([\d\s\u00A0,.]+) bytes\)");
-                    if (!sizeMatch.Success)
-                    {
-                        // Also try the Linux makefs format: "... size of NNNN ..."
-                        sizeMatch = Regex.Match(output, @"size of (\d+)");
-                    }
+                    // UFS2Tool format variations: 
+                    // 1. "Image size (6 833 565 696 bytes)"
+                    // 2. "... size of 6833565696 ..."
+                    // 3. "image size 6833565696 too large" (when using -s)
+                    
+                    var sizeMatch = Regex.Match(output, @"(?:Image size \(|size of |image size )([\d\s\u00A0,.]+)", RegexOptions.IgnoreCase);
+                    bool parsed = false;
 
                     if (sizeMatch.Success)
                     {
                         var sizeStr = Regex.Replace(sizeMatch.Groups[1].Value, @"[\s\u00A0,.]", "");
-                        if (long.TryParse(sizeStr, out var size))
+                        if (long.TryParse(sizeStr, out var size) && size > 0)
                         {
                             Log($"  Block {b}, Fragment {f} → {FormatSize(size)}");
+                            parsed = true;
 
                             if (bestResult == null || size < bestResult.ImageSize)
                             {
@@ -134,9 +142,20 @@ namespace Dump2UfsGui.Services
                             }
                         }
                     }
-                    else
+
+                    if (!parsed)
                     {
-                        Log($"  Block {b}: Could not parse size (output may indicate an error)");
+                        Log($"  Block {b}: Could not parse size from output.");
+                        // Only log first two lines of output to avoid cluttering, plus any line containing "error" or "size"
+                        var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                        for (int lineIdx = 0; lineIdx < Math.Min(lines.Length, 3); lineIdx++)
+                            Log($"    > {lines[lineIdx].Trim()}");
+                        foreach (var line in lines)
+                        {
+                            if (line.Contains("error", StringComparison.OrdinalIgnoreCase) || line.Contains("size", StringComparison.OrdinalIgnoreCase))
+                                if (!Array.Exists(lines, l => l == line && Array.IndexOf(lines, l) < 3))
+                                    Log($"    > {line.Trim()}");
+                        }
                     }
                 }
 
@@ -145,11 +164,20 @@ namespace Dump2UfsGui.Services
 
                 if (bestResult == null)
                 {
-                    throw new Exception("Failed to determine optimal block size. UFS2Tool may have changed its output format.");
+                    // Fallback for extremely large games: if optimization fails, use 64K blocks as a safe default
+                    // instead of erroring out entirely, as 64K is most stable for large games.
+                    Log("⚠️ Warning: Failed to determine optimal block size via testing.");
+                    Log("   Falling back to safe default: Block 65536, Fragment 8192.");
+                    bestResult = new BlockSizeResult
+                    {
+                        BlockSize = 65536,
+                        FragmentSize = 8192,
+                        ImageSize = inputDirSize // Estimate
+                    };
                 }
 
                 Log("");
-                Log($"Optimal: Block {bestResult.BlockSize}, Fragment {bestResult.FragmentSize} → {FormatSize(bestResult.ImageSize)}");
+                Log($"Working with: Block {bestResult.BlockSize}, Fragment {bestResult.FragmentSize}");
                 Log("");
 
                 result.OptimalBlockSize = bestResult.BlockSize;
@@ -157,6 +185,13 @@ namespace Dump2UfsGui.Services
 
                 // Phase 2: Create the actual image
                 cancellationToken.ThrowIfCancellationRequested();
+
+                // If output file exists, try to delete it first to avoid lock issues
+                if (File.Exists(outputPath))
+                {
+                    try { File.Delete(outputPath); }
+                    catch (Exception ex) { Log($"⚠️ Note: Could not delete existing file: {ex.Message}"); }
+                }
 
                 ReportProgress("Creating", $"Building UFS2 image ({FormatSize(bestResult.ImageSize)})...", 60);
 
@@ -200,6 +235,9 @@ namespace Dump2UfsGui.Services
                 result.ErrorMessage = "Conversion was cancelled.";
                 Log("❌ Conversion cancelled by user.");
                 ReportProgress("Cancelled", "Conversion was cancelled.", 0, true);
+                
+                // Cleanup incomplete file
+                CleanupIncompleteFile(outputPath);
             }
             catch (Exception ex)
             {
@@ -207,9 +245,32 @@ namespace Dump2UfsGui.Services
                 result.ErrorMessage = ex.Message;
                 Log($"❌ Error: {ex.Message}");
                 ReportProgress("Error", ex.Message, 0, true);
+                
+                // Cleanup incomplete file on failure
+                CleanupIncompleteFile(outputPath);
             }
 
             return result;
+        }
+
+        private void CleanupIncompleteFile(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return;
+            try
+            {
+                // Give it a tiny bit of time for the process to actually release the handle
+                if (File.Exists(path))
+                {
+                    Log("🧹 Cleaning up incomplete output file...");
+                    // Try a few times in case of slow handle release
+                    for (int i = 0; i < 3; i++)
+                    {
+                        try { File.Delete(path); break; }
+                        catch { Thread.Sleep(200); }
+                    }
+                }
+            }
+            catch { }
         }
 
         private async Task<string> RunUfs2ToolAsync(string arguments, CancellationToken ct)
@@ -226,14 +287,24 @@ namespace Dump2UfsGui.Services
             };
 
             using var process = new Process { StartInfo = psi };
-            process.Start();
+            try
+            {
+                process.Start();
+                var stdoutTask = process.StandardOutput.ReadToEndAsync();
+                var stderrTask = process.StandardError.ReadToEndAsync();
 
-            var stdout = await process.StandardOutput.ReadToEndAsync();
-            var stderr = await process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync(ct);
 
-            await process.WaitForExitAsync(ct);
-
-            return stdout + "\n" + stderr;
+                return await stdoutTask + "\n" + await stderrTask;
+            }
+            catch (OperationCanceledException)
+            {
+                if (!process.HasExited)
+                {
+                    try { process.Kill(true); } catch { }
+                }
+                throw;
+            }
         }
 
         private async Task<string> RunUfs2ToolWithProgressAsync(string arguments, CancellationToken ct)
@@ -270,30 +341,41 @@ namespace Dump2UfsGui.Services
                 }
             };
 
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-
-            // Pulse progress while running
-            _ = Task.Run(async () =>
+            try
             {
-                int p = 65;
-                while (!process.HasExited && !ct.IsCancellationRequested)
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                // Pulse progress while running
+                _ = Task.Run(async () =>
                 {
-                    ReportProgress("Creating", "Writing UFS2 filesystem image...", Math.Min(p, 95));
-                    p += 2;
-                    await Task.Delay(500, ct).ConfigureAwait(false);
+                    int p = 65;
+                    while (!process.HasExited && !ct.IsCancellationRequested)
+                    {
+                        ReportProgress("Creating", "Writing UFS2 filesystem image...", Math.Min(p, 95));
+                        p += 2;
+                        try { await Task.Delay(500, ct).ConfigureAwait(false); } catch { break; }
+                    }
+                }, ct);
+
+                await process.WaitForExitAsync(ct);
+
+                if (process.ExitCode != 0)
+                {
+                    throw new Exception($"UFS2Tool exited with code {process.ExitCode}.\n\n{allOutput}");
                 }
-            }, ct);
 
-            await process.WaitForExitAsync(ct);
-
-            if (process.ExitCode != 0)
-            {
-                throw new Exception($"UFS2Tool exited with code {process.ExitCode}.\n\n{allOutput}");
+                return allOutput.ToString();
             }
-
-            return allOutput.ToString();
+            catch (OperationCanceledException)
+            {
+                if (!process.HasExited)
+                {
+                    try { process.Kill(true); } catch { }
+                }
+                throw;
+            }
         }
 
         private void Log(string message)
