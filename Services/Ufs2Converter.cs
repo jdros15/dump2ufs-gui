@@ -51,6 +51,8 @@ namespace Dump2UfsGui.Services
             string inputPath,
             string outputPath,
             string label,
+            string titleId,
+            bool enableCompatibility = false,
             CancellationToken cancellationToken = default)
         {
             var result = new ConversionResult { OutputPath = outputPath };
@@ -176,8 +178,16 @@ namespace Dump2UfsGui.Services
 
                     ReportProgress("Complete", $"Successfully created {FormatSize(fi.Length)} image!", 100);
                     Log("");
-                    Log($"✅ Success! Output: {outputPath}");
                     Log($"   File size: {FormatSize(fi.Length)}");
+                    
+                    if (enableCompatibility && outputPath.EndsWith(".ffpkg", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ReportProgress("Finalizing", "Applying EchoStretch compatibility trailer...", 98);
+                        await WrapAsFfpkgAsync(outputPath, titleId, inputPath, cancellationToken);
+                        fi = new FileInfo(outputPath);
+                        result.FileSize = fi.Length;
+                        Log($"   Compatibility trailer applied. New size: {FormatSize(fi.Length)}");
+                    }
                 }
                 else
                 {
@@ -300,6 +310,60 @@ namespace Dump2UfsGui.Services
                 PercentComplete = percent,
                 IsError = isError
             });
+        }
+
+        private async Task WrapAsFfpkgAsync(string ffpkgPath, string titleId, string sourceDir, CancellationToken ct)
+        {
+            try
+            {
+                var sceSysPath = Path.Combine(sourceDir, "sce_sys");
+                if (!Directory.Exists(sceSysPath))
+                {
+                    Log("⚠ Warning: sce_sys folder not found. Skipping compatibility trailer.");
+                    return;
+                }
+
+                var files = new List<string>(Directory.GetFiles(sceSysPath, "*", SearchOption.AllDirectories));
+                files.Sort(); // Deterministic order
+
+                using var fs = new FileStream(ffpkgPath, FileMode.Append, FileAccess.Write, FileShare.None);
+                using var bw = new BinaryWriter(fs);
+
+                uint fileCount = (uint)files.Count;
+                
+                // Write entries: [file_data | uint64 size | path+null | uint16 path_len]
+                foreach (var file in files)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    
+                    var relativePath = file.Substring(sourceDir.Length).Replace("\\", "/").TrimStart('/');
+                    var pathBytes = System.Text.Encoding.ASCII.GetBytes(relativePath);
+                    byte[] fileData = await File.ReadAllBytesAsync(file, ct);
+                    
+                    bw.Write(fileData);
+                    bw.Write((ulong)fileData.Length);
+                    bw.Write(pathBytes);
+                    bw.Write((byte)0); // Null terminator
+                    bw.Write((ushort)(pathBytes.Length + 1));
+                    
+                    Log($"  + {relativePath} ({fileData.Length} bytes)");
+                }
+
+                // Header data
+                byte[] magic = System.Text.Encoding.ASCII.GetBytes("ffpkg");
+                byte[] title = System.Text.Encoding.ASCII.GetBytes(titleId.PadRight(9).Substring(0, 9));
+                ushort version = 1;
+
+                bw.Write(fileCount);
+                bw.Write(title);
+                bw.Write(version);
+                bw.Write(magic);
+            }
+            catch (Exception ex)
+            {
+                Log($"❌ Failed to apply compatibility trailer: {ex.Message}");
+                throw;
+            }
         }
 
         public static string FormatSize(long bytes)

@@ -12,6 +12,8 @@ namespace Dump2UfsGui.Services
         public bool IsUpdateInstalled { get; set; }
         public string? LastInputDir { get; set; }
         public string? LastOutputDir { get; set; }
+        public string OutputFormat { get; set; } = "ffpkg";
+        public bool EnableExperimentalFfpkg { get; set; } = false;
     }
 
     public static class SettingsManager

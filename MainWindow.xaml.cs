@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -44,6 +45,12 @@ namespace Dump2UfsGui
         }
 
         // Custom title bar buttons
+        private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Left)
+                DragMove();
+        }
+
         private void BtnMinimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
         private void BtnClose_Click(object sender, RoutedEventArgs e) => Close();
 
@@ -96,11 +103,28 @@ namespace Dump2UfsGui
                 PanelSetup.Visibility = Visibility.Visible;
             }
 
-            // Pre-fill output dir from settings
+            // Pre-fill output dir and format from settings
             if (!string.IsNullOrEmpty(_settings.LastOutputDir) && Directory.Exists(_settings.LastOutputDir))
             {
                 TxtOutputDir.Text = _settings.LastOutputDir;
             }
+
+            // Initialize format combo
+            if (ComboFormat != null)
+            {
+                foreach (System.Windows.Controls.ComboBoxItem item in ComboFormat.Items)
+                {
+                    if (item.Tag?.ToString() == _settings.OutputFormat)
+                    {
+                        item.IsSelected = true;
+                        break;
+                    }
+                }
+            }
+
+            // Initialize experimental ffpkg checkbox
+            CheckExperimentalFfpkg.IsChecked = _settings.EnableExperimentalFfpkg;
+            CheckExperimentalFfpkg.Visibility = _settings.OutputFormat == "ffpkg" ? Visibility.Visible : Visibility.Collapsed;
 
             // Discrete update check on launch (as soon as ready)
             _ = Task.Run(async () =>
@@ -144,7 +168,12 @@ namespace Dump2UfsGui
                     ? TxtOutputDir.Text
                     : Path.GetDirectoryName(folderPath) ?? folderPath;
 
-                var outputPath = Path.Combine(outputDir, gameInfo.SuggestedOutputName);
+                var extension = _settings.OutputFormat == "img" ? ".img" : ".ffpkg";
+                var suggestedName = _settings.OutputFormat == "img" 
+                    ? Path.GetFileName(folderPath) + ".img" // For .img, use folder name as default
+                    : gameInfo.SuggestedOutputName;
+
+                var outputPath = Path.Combine(outputDir, suggestedName);
 
                 var item = new QueueItem
                 {
@@ -188,10 +217,11 @@ namespace Dump2UfsGui
                 TxtQueueCount.Text = "";
             }
 
+            var formatExt = _settings.OutputFormat == "img" ? ".img" : ".ffpkg";
             BtnConvert.IsEnabled = waitingCount > 0 && _ufs2ToolPath != null && !_isProcessingQueue;
             TxtConvertButton.Text = waitingCount > 1
-                ? $"Convert {waitingCount} Games to .ffpkg"
-                : "Convert to .ffpkg";
+                ? $"Convert {waitingCount} Games to {formatExt}"
+                : $"Convert to {formatExt}";
         }
 
         private void BtnRemoveQueueItem_Click(object sender, RoutedEventArgs e)
@@ -442,10 +472,66 @@ namespace Dump2UfsGui
                 _settings.LastOutputDir = dialog.SelectedPath;
 
                 // Update output paths for all waiting items
+                var extension = _settings.OutputFormat == "img" ? ".img" : ".ffpkg";
                 foreach (var item in _queue.Where(q => q.Status == QueueItemStatus.Waiting))
                 {
-                    item.OutputPath = Path.Combine(dialog.SelectedPath, item.GameInfo.SuggestedOutputName);
+                    var baseName = _settings.OutputFormat == "img" 
+                        ? Path.GetFileName(item.InputPath) 
+                        : item.GameInfo.TitleId;
+                    item.OutputPath = Path.Combine(dialog.SelectedPath, baseName + extension);
                 }
+            }
+        }
+
+        private void ComboFormat_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (ComboFormat?.SelectedItem is System.Windows.Controls.ComboBoxItem selectedItem)
+            {
+                var format = selectedItem.Tag?.ToString() ?? "ffpkg";
+                if (_settings.OutputFormat != format)
+                {
+                    _settings.OutputFormat = format;
+                    SettingsManager.Save(_settings);
+
+                    // Update output paths for all waiting items in queue
+                    var extension = format == "img" ? ".img" : ".ffpkg";
+                    var outputDir = TxtOutputDir.Text;
+                    if (!string.IsNullOrWhiteSpace(outputDir))
+                    {
+                        foreach (var item in _queue.Where(q => q.Status == QueueItemStatus.Waiting))
+                        {
+                            var baseName = format == "img" 
+                                ? Path.GetFileName(item.InputPath) 
+                                : item.GameInfo.TitleId;
+                            item.OutputPath = Path.Combine(outputDir, baseName + extension);
+                        }
+                    }
+
+                    CheckExperimentalFfpkg.Visibility = format == "ffpkg" ? Visibility.Visible : Visibility.Collapsed;
+                    UpdateQueueUI();
+                }
+            }
+        }
+
+        private void CheckExperimentalFfpkg_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings != null && CheckExperimentalFfpkg != null)
+            {
+                _settings.EnableExperimentalFfpkg = CheckExperimentalFfpkg.IsChecked ?? false;
+                SettingsManager.Save(_settings);
+            }
+        }
+
+        private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+                e.Handled = true;
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"❌ Failed to open link: {ex.Message}");
             }
         }
 
@@ -481,9 +567,13 @@ namespace Dump2UfsGui
             }
 
             // Update output paths to use current output dir
+            var extension = _settings.OutputFormat == "img" ? ".img" : ".ffpkg";
             foreach (var item in waitingItems)
             {
-                item.OutputPath = Path.Combine(outputDir, item.GameInfo.SuggestedOutputName);
+                var baseName = _settings.OutputFormat == "img" 
+                    ? Path.GetFileName(item.InputPath) 
+                    : item.GameInfo.TitleId;
+                item.OutputPath = Path.Combine(outputDir, baseName + extension);
             }
 
             // Check for existing files
@@ -517,7 +607,11 @@ namespace Dump2UfsGui
                     if (_cts.Token.IsCancellationRequested) break;
 
                     // Update output path in case output dir changed
-                    nextItem.OutputPath = Path.Combine(TxtOutputDir.Text, nextItem.GameInfo.SuggestedOutputName);
+                    var nextExt = _settings.OutputFormat == "img" ? ".img" : ".ffpkg";
+                    var baseName = _settings.OutputFormat == "img" 
+                        ? Path.GetFileName(nextItem.InputPath) 
+                        : nextItem.GameInfo.TitleId;
+                    nextItem.OutputPath = Path.Combine(TxtOutputDir.Text, baseName + nextExt);
 
                     nextItem.Status = QueueItemStatus.Processing;
                     nextItem.StatusText = "Optimizing block sizes...";
@@ -544,8 +638,13 @@ namespace Dump2UfsGui
                             Dispatcher.Invoke(() => AppendLog(msg));
                         };
 
-                        var convResult = await Task.Run(
-                            () => converter.ConvertAsync(nextItem.InputPath, nextItem.OutputPath, nextItem.GameInfo.AutoLabel, _cts.Token));
+                        var convResult = await converter.ConvertAsync(
+                            nextItem.InputPath,
+                            nextItem.OutputPath,
+                            nextItem.GameInfo.AutoLabel,
+                            nextItem.GameInfo.TitleId,
+                            _settings.EnableExperimentalFfpkg,
+                            _cts.Token);
 
                         if (convResult.Success)
                         {
