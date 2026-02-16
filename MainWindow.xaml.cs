@@ -304,6 +304,8 @@ namespace Dump2UfsGui
             TxtOutputDir.IsReadOnly = _isProcessingQueue;
             BtnCheckUpdate.IsEnabled = !_isProcessingQueue;
             BtnUninstallUpdate.IsEnabled = !_isProcessingQueue;
+            ComboFormat.IsEnabled = !_isProcessingQueue;
+            CheckExperimentalFfpkg.IsEnabled = !_isProcessingQueue;
         }
 
         private void BtnRemoveQueueItem_Click(object sender, RoutedEventArgs e)
