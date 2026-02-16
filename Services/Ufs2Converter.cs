@@ -327,41 +327,62 @@ namespace Dump2UfsGui.Services
             using var process = new Process { StartInfo = psi };
             var allOutput = new System.Text.StringBuilder();
 
-            process.OutputDataReceived += (s, e) =>
+            void HandleData(string? data)
             {
-                if (e.Data != null)
-                {
-                    allOutput.AppendLine(e.Data);
-                    Log(e.Data);
-                }
-            };
+                if (data == null) return;
 
-            process.ErrorDataReceived += (s, e) =>
-            {
-                if (e.Data != null)
+                lock (allOutput)
                 {
-                    allOutput.AppendLine(e.Data);
-                    Log(e.Data);
+                    allOutput.AppendLine(data);
                 }
-            };
+                Log(data);
+
+                // 1. Parsing "Adding files to image...  35% (920/2591 files, 54.49 MiB/154.67 MiB)"
+                var addMatch = Regex.Match(data, @"Adding files to image\.\.\.\s+(\d+)%", RegexOptions.IgnoreCase);
+                if (addMatch.Success && int.TryParse(addMatch.Groups[1].Value, out int percent))
+                {
+                    // Map tool's 0-100% to UI's 65-98% range (main work phase)
+                    int mappedPercent = 65 + (int)(percent * 0.33);
+                    
+                    string detail = data.Trim();
+                    int markerIndex = detail.IndexOf("Adding files to image...", StringComparison.OrdinalIgnoreCase);
+                    if (markerIndex >= 0)
+                    {
+                        detail = "Adding files: " + detail.Substring(markerIndex + "Adding files to image...".Length).Trim();
+                    }
+                    
+                    ReportProgress("Creating", detail, mappedPercent);
+                    return;
+                }
+
+                // 2. Parsing "Writing cylinder groups... 49%"
+                var cgMatch = Regex.Match(data, @"Writing cylinder groups\.\.\.\s+(\d+)%", RegexOptions.IgnoreCase);
+                if (cgMatch.Success && int.TryParse(cgMatch.Groups[1].Value, out int cgPercent))
+                {
+                    // Map tool's 0-100% to UI's 60-65% range (initialization phase)
+                    int mappedPercent = 60 + (int)(cgPercent * 0.05);
+                    ReportProgress("Creating", data.Trim(), mappedPercent);
+                    return;
+                }
+
+                if (data.Contains("Populating", StringComparison.OrdinalIgnoreCase))
+                {
+                    ReportProgress("Creating", data.Trim(), 65);
+                }
+                else if (data.Contains("Cylinder groups:", StringComparison.OrdinalIgnoreCase))
+                {
+                    ReportProgress("Creating", "Initializing UFS2 filesystem structure...", 60);
+                }
+            }
+
+            process.OutputDataReceived += (s, e) => HandleData(e.Data);
+            process.ErrorDataReceived += (s, e) => HandleData(e.Data);
 
             try
             {
                 process.Start();
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
-
-                // Pulse progress while running
-                _ = Task.Run(async () =>
-                {
-                    int p = 60;
-                    while (!process.HasExited && !ct.IsCancellationRequested)
-                    {
-                        ReportProgress("Creating", "Writing UFS2 filesystem image...", Math.Min(p, 98));
-                        p += 1;
-                        try { await Task.Delay(300, ct).ConfigureAwait(false); } catch { break; }
-                    }
-                }, ct);
 
                 await process.WaitForExitAsync(ct);
 
