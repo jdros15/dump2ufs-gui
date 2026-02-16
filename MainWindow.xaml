@@ -578,12 +578,12 @@
                         Margin="0,0,8,0">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Format:" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Foreground="{StaticResource TextSecondaryBrush}" Visibility="Collapsed"/>
                         <ComboBox x:Name="ComboFormat" Width="140" Height="28" VerticalContentAlignment="Center"
                                   SelectionChanged="ComboFormat_SelectionChanged" Margin="0,0,20,0"
-                                  SelectedIndex="0">
+                                  SelectedIndex="0" Visibility="Collapsed">
                             <ComboBoxItem Content="Fake FPKG (.ffpkg)" Tag="ffpkg"/>
-                            <ComboBoxItem Content="PFS Image (.img)" Tag="img"/>
+                            <ComboBoxItem Content="PFS Image (.pfs)" Tag="pfs"/>
                         </ComboBox>
 
                         <CheckBox x:Name="CheckExperimentalFfpkg" Style="{StaticResource ToggleSwitchStyle}"

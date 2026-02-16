@@ -159,6 +159,11 @@ namespace Dump2UfsGui
                 TxtOutputDir.Text = _settings.LastOutputDir;
             }
 
+            // FOR FUTURE CONTEXT: The format selector is currently hidden in MainWindow.xaml
+            // and we are forcing ffpkg for this build. To re-enable the format selector,
+            // set Visibility back to Visible in MainWindow.xaml and remove the force below.
+            _settings.OutputFormat = "ffpkg"; 
+
             // Initialize format combo
             if (ComboFormat != null)
             {
@@ -222,9 +227,9 @@ namespace Dump2UfsGui
                     ? TxtOutputDir.Text
                     : Path.GetDirectoryName(folderPath) ?? folderPath;
 
-                var extension = _settings.OutputFormat == "img" ? ".img" : ".ffpkg";
-                var suggestedName = _settings.OutputFormat == "img" 
-                    ? Path.GetFileName(folderPath) + ".img" // For .img, use folder name as default
+                var extension = _settings.OutputFormat == "pfs" ? ".pfs" : ".ffpkg";
+                var suggestedName = _settings.OutputFormat == "pfs" 
+                    ? Path.GetFileName(folderPath) + ".pfs" // For .pfs, use folder name as default
                     : gameInfo.SuggestedOutputName;
 
                 var outputPath = Path.Combine(outputDir, suggestedName);
@@ -287,7 +292,7 @@ namespace Dump2UfsGui
             else if (totalCount > 0)
             {
                 TxtQueueCount.Text = $"({totalCount} game{(totalCount == 1 ? "" : "s")})";
-                var formatExt = (_settings?.OutputFormat ?? "ffpkg") == "img" ? ".img" : ".ffpkg";
+                var formatExt = (_settings?.OutputFormat ?? "ffpkg") == "pfs" ? ".pfs" : ".ffpkg";
                 TxtConvertButton.Text = waitingCount > 1
                     ? $"Convert {waitingCount} Games to {formatExt}"
                     : $"Convert to {formatExt}";
@@ -567,10 +572,10 @@ namespace Dump2UfsGui
                 _settings.LastOutputDir = dialog.FolderName;
 
                 // Update output paths for all waiting items
-                var extension = _settings.OutputFormat == "img" ? ".img" : ".ffpkg";
+                var extension = _settings.OutputFormat == "pfs" ? ".pfs" : ".ffpkg";
                 foreach (var item in _queue.Where(q => q.Status == QueueItemStatus.Waiting))
                 {
-                    var baseName = _settings.OutputFormat == "img" 
+                    var baseName = _settings.OutputFormat == "pfs" 
                         ? Path.GetFileName(item.InputPath) 
                         : item.GameInfo.TitleId;
                     item.OutputPath = Path.Combine(dialog.FolderName, baseName + extension);
@@ -589,13 +594,13 @@ namespace Dump2UfsGui
                     SettingsManager.Save(_settings);
 
                     // Update output paths for all waiting items in queue
-                    var extension = format == "img" ? ".img" : ".ffpkg";
+                    var extension = format == "pfs" ? ".pfs" : ".ffpkg";
                     var outputDir = TxtOutputDir.Text;
                     if (!string.IsNullOrWhiteSpace(outputDir))
                     {
                         foreach (var item in _queue.Where(q => q.Status == QueueItemStatus.Waiting))
                         {
-                            var baseName = format == "img" 
+                            var baseName = format == "pfs" 
                                 ? Path.GetFileName(item.InputPath) 
                                 : item.GameInfo.TitleId;
                             item.OutputPath = Path.Combine(outputDir, baseName + extension);
@@ -662,10 +667,10 @@ namespace Dump2UfsGui
             }
 
             // Update output paths to use current output dir
-            var extension = _settings.OutputFormat == "img" ? ".img" : ".ffpkg";
+            var extension = _settings.OutputFormat == "pfs" ? ".pfs" : ".ffpkg";
             foreach (var item in waitingItems)
             {
-                var baseName = _settings.OutputFormat == "img" 
+                var baseName = _settings.OutputFormat == "pfs" 
                     ? Path.GetFileName(item.InputPath) 
                     : item.GameInfo.TitleId;
                 item.OutputPath = Path.Combine(outputDir, baseName + extension);
@@ -702,8 +707,8 @@ namespace Dump2UfsGui
                     if (_cts.Token.IsCancellationRequested) break;
 
                     // Update output path in case output dir changed
-                    var nextExt = _settings.OutputFormat == "img" ? ".img" : ".ffpkg";
-                    var baseName = _settings.OutputFormat == "img" 
+                    var nextExt = _settings.OutputFormat == "pfs" ? ".pfs" : ".ffpkg";
+                    var baseName = _settings.OutputFormat == "pfs" 
                         ? Path.GetFileName(nextItem.InputPath) 
                         : nextItem.GameInfo.TitleId;
                     nextItem.OutputPath = Path.Combine(TxtOutputDir.Text, baseName + nextExt);

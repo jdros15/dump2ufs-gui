@@ -95,7 +95,7 @@ namespace Dump2UfsGui.Services
                 }
 
                 BlockSizeResult? bestResult = null;
-                var tempFile = Path.Combine(Path.GetTempPath(), $"ufs2tool_test_{Guid.NewGuid():N}.img");
+                var tempFile = Path.Combine(Path.GetTempPath(), $"ufs2tool_test_{Guid.NewGuid():N}.pfs");
 
                 for (int i = 0; i < testableBlockSizes.Count; i++)
                 {

@@ -13,7 +13,7 @@ A powerful, modern Windows GUI for **dump2ufs**. This application simplifies con
 - **Self-Healing Infrastructure**: At every launch, the app performs a health check on its internal components and automatically repairs itself if files are missing or corrupted.
 - **Auto-Detection**: Automatically parses game metadata (Title Name, Title ID, Version) to generate optimized labels and filenames.
 - **Optimization**: Efficiently calculates the best block sizes to produce the smallest possible images.
-- **Output Flexibility**: Support for both Fake FPKGs (`.ffpkg`) and raw PFS Images (`.img`).
+- **Optimized Output**: Generates space-efficient Fake FPKG (`.ffpkg`) images.
 - **Dump Installer Compatibility**: Optional one-click wrapping for EchoStretch's [Dump Installer](https://github.com/EchoStretch/dump_installer), including automated `sce_sys` metadata injection.
 
 > ⚠️ **Prerequisite**: This tool requires extracted (foldered) PS5 game dumps. Compressed archives (`.rar`, `.zip`, `.7z`, etc.) are **not** supported — please extract your dump first.
