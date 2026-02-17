@@ -55,7 +55,7 @@
                         <StackPanel VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="dump2ufs" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                <TextBlock Text="v1.3.2" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentPurpleBrush}" 
+                                <TextBlock Text="v1.3.3" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentPurpleBrush}" 
                                            VerticalAlignment="Bottom" Margin="6,0,0,2" Opacity="0.8"/>
                             </StackPanel>
                             <TextBlock Text="PS5 Game Dump Converter" FontSize="10" 
@@ -194,7 +194,7 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0" Text="💾 Output Directory:" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0"
                                Foreground="{StaticResource TextSecondaryBrush}"/>
-                    <TextBox x:Name="TxtOutputDir" Grid.Column="1" FontSize="12" Margin="0,0,8,0"/>
+                    <TextBox x:Name="TxtOutputDir" Grid.Column="1" FontSize="12" Margin="0,0,8,0" IsReadOnly="True" Focusable="False" Cursor="Arrow"/>
                     <Button x:Name="BtnBrowseOutput" Grid.Column="2" Content="Browse"
                             Style="{StaticResource SecondaryButton}" Click="BtnBrowseOutput_Click" MinWidth="100"/>
                 </Grid>
@@ -364,6 +364,20 @@
                                                     <TextBlock Text="  •  " FontSize="10" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
                                                     <TextBlock Text="{Binding GameInfo.TitleId}" FontSize="10" 
                                                                 Foreground="{StaticResource AccentPurpleBrush}" VerticalAlignment="Center"/>
+                                                     <TextBlock Text="{Binding ElapsedTimeString}" FontSize="10" 
+                                                                Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"
+                                                                Margin="10,0,0,0" Opacity="0.7">
+                                                         <TextBlock.Style>
+                                                             <Style TargetType="TextBlock">
+                                                                 <Setter Property="Visibility" Value="Visible"/>
+                                                                 <Style.Triggers>
+                                                                     <DataTrigger Binding="{Binding ElapsedTimeString}" Value="">
+                                                                         <Setter Property="Visibility" Value="Collapsed"/>
+                                                                     </DataTrigger>
+                                                                 </Style.Triggers>
+                                                             </Style>
+                                                         </TextBlock.Style>
+                                                     </TextBlock>
                                                 </StackPanel>
                                                 
                                                 <!-- Error/Status text -->

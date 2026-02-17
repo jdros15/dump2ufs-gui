@@ -9,7 +9,7 @@
     <RootNamespace>Dump2UfsGui</RootNamespace>
     <AssemblyName>dump2ufs-gui</AssemblyName>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>1.3.2</Version>
+    <Version>1.3.3</Version>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

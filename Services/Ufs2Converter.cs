@@ -206,6 +206,14 @@ namespace Dump2UfsGui.Services
                 Log($"Running: UFS2Tool.exe {makefsArgs}");
                 Log("");
 
+                // Safety check: UFS2Tool will try to read the output file if it's inside the input directory
+                var fullInput = Path.GetFullPath(inputPath);
+                var fullOutput = Path.GetFullPath(outputPath);
+                if (fullOutput.StartsWith(fullInput, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new Exception("The output file is located inside the input directory. This causes UFS2Tool to collide with itself as it tries to add the output file to the image while writing to it.");
+                }
+
                 var makefsOutput = await RunUfs2ToolWithProgressAsync(makefsArgs, cancellationToken);
 
                 // Verify output

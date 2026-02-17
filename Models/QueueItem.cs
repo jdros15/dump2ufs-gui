@@ -51,6 +51,22 @@ namespace Dump2UfsGui.Models
             set { _statusText = value; OnPropertyChanged(); }
         }
 
+        private System.TimeSpan _elapsedTime = System.TimeSpan.Zero;
+        public System.TimeSpan ElapsedTime
+        {
+            get => _elapsedTime;
+            set
+            {
+                _elapsedTime = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ElapsedTimeString));
+            }
+        }
+
+        public string ElapsedTimeString => _elapsedTime == System.TimeSpan.Zero ? "" : 
+                                           _elapsedTime.TotalHours >= 1 ? _elapsedTime.ToString(@"hh\:mm\:ss") : 
+                                           _elapsedTime.ToString(@"mm\:ss");
+
         public bool IsWaiting => _status == QueueItemStatus.Waiting;
         public bool CanRemove => _status == QueueItemStatus.Waiting;
         public bool IsError => _status == QueueItemStatus.Error;

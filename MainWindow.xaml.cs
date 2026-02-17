@@ -153,12 +153,6 @@ namespace Dump2UfsGui
                 PanelSetup.Visibility = Visibility.Visible;
             }
 
-            // Pre-fill output dir and format from settings
-            if (!string.IsNullOrEmpty(_settings.LastOutputDir) && Directory.Exists(_settings.LastOutputDir))
-            {
-                TxtOutputDir.Text = _settings.LastOutputDir;
-            }
-
             // FOR FUTURE CONTEXT: The format selector is currently hidden in MainWindow.xaml
             // and we are forcing ffpkg for this build. To re-enable the format selector,
             // set Visibility back to Visible in MainWindow.xaml and remove the force below.
@@ -199,12 +193,14 @@ namespace Dump2UfsGui
 
         private void AddToQueue(string folderPath)
         {
-            // Check for duplicates (case-insensitive path comparison)
-            var normalizedPath = Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            // Normalize path strictly (full path, no trailing slashes)
+            folderPath = Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+            // Check for duplicates
             foreach (var existing in _queue)
             {
                 var existingNormalized = Path.GetFullPath(existing.InputPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                if (string.Equals(normalizedPath, existingNormalized, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(folderPath, existingNormalized, StringComparison.OrdinalIgnoreCase))
                 {
                     AppendLog($"⚠ Skipped duplicate: {Path.GetFileName(folderPath)}");
                     return;
@@ -222,14 +218,37 @@ namespace Dump2UfsGui
             {
                 var gameInfo = GameDumpValidator.ParseGameInfo(folderPath);
 
-                // Auto-generate output path
-                var outputDir = !string.IsNullOrWhiteSpace(TxtOutputDir.Text)
-                    ? TxtOutputDir.Text
-                    : Path.GetDirectoryName(folderPath) ?? folderPath;
+                // Determine effective output directory
+                // If it's the first item, we use the parent of the input folder
+                // If the box is already filled, we strictly use that
+                string outputDir;
+                if (string.IsNullOrWhiteSpace(TxtOutputDir.Text))
+                {
+                    outputDir = Path.GetDirectoryName(folderPath) ?? folderPath;
+                    TxtOutputDir.Text = outputDir;
+                    AppendLog($"ℹ️ Output directory anchored to: {outputDir}");
+                }
+                else
+                {
+                    outputDir = TxtOutputDir.Text;
+                    
+                    // Conflict Detection: If the existing output dir is INSIDE this new dump folder,
+                    // it will cause a file lock error during conversion.
+                    if (outputDir.StartsWith(folderPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        MessageBox.Show(
+                            $"⚠️ CONFLICT DETECTED\n\n" +
+                            $"The current output directory:\n{outputDir}\n\n" +
+                            $"is located INSIDE the game folder you just added:\n{folderPath}\n\n" +
+                            $"This will cause conversion to fail because UFS2Tool cannot save the image inside the directory it's reading from.\n\n" +
+                            $"Please change the output directory using the 'Browse' button.",
+                            "Path Conflict", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
+                }
 
                 var extension = _settings.OutputFormat == "pfs" ? ".pfs" : ".ffpkg";
                 var suggestedName = _settings.OutputFormat == "pfs" 
-                    ? Path.GetFileName(folderPath) + ".pfs" // For .pfs, use folder name as default
+                    ? Path.GetFileName(folderPath) + ".pfs" 
                     : gameInfo.SuggestedOutputName;
 
                 var outputPath = Path.Combine(outputDir, suggestedName);
@@ -244,12 +263,6 @@ namespace Dump2UfsGui
 
                 _queue.Add(item);
                 AppendLog($"Added to queue: {gameInfo.TitleName} ({gameInfo.TitleId})");
-
-                // Auto-fill output dir if empty
-                if (string.IsNullOrWhiteSpace(TxtOutputDir.Text))
-                {
-                    TxtOutputDir.Text = outputDir;
-                }
             }
             catch (Exception ex)
             {
@@ -306,7 +319,6 @@ namespace Dump2UfsGui
             // Master enable/disable
             BtnConvert.IsEnabled = waitingCount > 0 && _ufs2ToolPath != null && !_isProcessingQueue;
             BtnBrowseOutput.IsEnabled = !_isProcessingQueue;
-            TxtOutputDir.IsReadOnly = _isProcessingQueue;
             BtnCheckUpdate.IsEnabled = !_isProcessingQueue;
             BtnUninstallUpdate.IsEnabled = !_isProcessingQueue;
             ComboFormat.IsEnabled = !_isProcessingQueue;
@@ -643,8 +655,17 @@ namespace Dump2UfsGui
         {
             if (_isProcessingQueue || _ufs2ToolPath == null) return;
 
+            // Set flag and update UI immediately to prevent re-entrancy
+            _isProcessingQueue = true;
+            UpdateQueueUI();
+
             var waitingItems = _queue.Where(q => q.Status == QueueItemStatus.Waiting).ToList();
-            if (waitingItems.Count == 0) return;
+            if (waitingItems.Count == 0)
+            {
+                _isProcessingQueue = false;
+                UpdateQueueUI();
+                return;
+            }
 
             // Validate output directory
             var outputDir = TxtOutputDir.Text;
@@ -652,6 +673,8 @@ namespace Dump2UfsGui
             {
                 MessageBox.Show("Please specify an output directory.", "Missing Info",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
+                _isProcessingQueue = false;
+                UpdateQueueUI();
                 return;
             }
 
@@ -662,6 +685,8 @@ namespace Dump2UfsGui
                 {
                     MessageBox.Show($"Cannot create output directory:\n{ex.Message}", "Error",
                         MessageBoxButton.OK, MessageBoxImage.Error);
+                    _isProcessingQueue = false;
+                    UpdateQueueUI();
                     return;
                 }
             }
@@ -684,12 +709,15 @@ namespace Dump2UfsGui
                 var result = MessageBox.Show(
                     $"The following files already exist and will be overwritten:\n\n{names}\n\nContinue?",
                     "Files Exist", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                if (result != MessageBoxResult.Yes) return;
+                if (result != MessageBoxResult.Yes)
+                {
+                    _isProcessingQueue = false;
+                    UpdateQueueUI();
+                    return;
+                }
             }
 
-            _isProcessingQueue = true;
             _cts = new CancellationTokenSource();
-            UpdateQueueUI();
             PanelLog.Visibility = Visibility.Visible;
             LogColumn.Width = new GridLength(1, GridUnitType.Star);
 
@@ -713,12 +741,38 @@ namespace Dump2UfsGui
                         : nextItem.GameInfo.TitleId;
                     nextItem.OutputPath = Path.Combine(TxtOutputDir.Text, baseName + nextExt);
 
+                    // Safety check: Is output inside input?
+                    if (Path.GetFullPath(nextItem.OutputPath).StartsWith(Path.GetFullPath(nextItem.InputPath), StringComparison.OrdinalIgnoreCase))
+                    {
+                        nextItem.Status = QueueItemStatus.Error;
+                        nextItem.StatusText = "❌ Output path cannot be inside the input folder";
+                        AppendLog($"❌ Error: Output file '{nextItem.OutputPath}' is inside its own source directory. This is not allowed as it causes UFS2Tool to collide with itself.");
+                        failed++;
+                        continue;
+                    }
+
                     nextItem.Status = QueueItemStatus.Processing;
                     nextItem.StatusText = "Optimizing block sizes...";
                     nextItem.Progress = 0;
+                    nextItem.ElapsedTime = TimeSpan.Zero;
 
                     TxtStatus.Text = $"Converting {nextItem.GameInfo.TitleName}... ({completed + 1}/{completed + _queue.Count(q => q.Status == QueueItemStatus.Waiting) + 1})";
                     AppendLog($"\n=== Converting: {nextItem.GameInfo.TitleName} ({nextItem.GameInfo.TitleId}) ===");
+
+                    var sw = Stopwatch.StartNew();
+                    using var ctsTime = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+                    var timeTask = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            while (!ctsTime.Token.IsCancellationRequested)
+                            {
+                                await Task.Delay(1000, ctsTime.Token);
+                                Dispatcher.Invoke(() => nextItem.ElapsedTime = sw.Elapsed);
+                            }
+                        }
+                        catch (OperationCanceledException) { }
+                    });
 
                     try
                     {
@@ -745,6 +799,11 @@ namespace Dump2UfsGui
                             nextItem.GameInfo.TitleId,
                             _settings.EnableExperimentalFfpkg,
                             _cts.Token);
+
+                        ctsTime.Cancel();
+                        await timeTask;
+                        sw.Stop();
+                        nextItem.ElapsedTime = sw.Elapsed;
 
                         if (convResult.Success)
                         {
