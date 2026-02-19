@@ -8,8 +8,6 @@ A powerful, modern Windows GUI for **dump2ufs**. This application simplifies con
 
 - **Batch Processing**: Drag and drop multiple game folders to queue them. The app will process them sequentially while you do other things.
 - **Fully Standalone**: UFS2Tool 3.0 is integrated directly into the executable. No separate downloads or manual configuration required on first launch.
-- **Smart Update Checker**: Keep your core tool up to date. Check for the latest UFS2Tool releases from GitHub directly within the app and update with one click.
-- **Reversion System**: Easily roll back to the stable integrated v3.0 version at any time if a newer update causes issues.
 - **Self-Healing Infrastructure**: At every launch, the app performs a health check on its internal components and automatically repairs itself if files are missing or corrupted.
 - **Auto-Detection**: Automatically parses game metadata (Title Name, Title ID, Version) to generate optimized labels and filenames.
 - **Optimization**: Efficiently calculates the best block sizes to produce the smallest possible images.
@@ -24,7 +22,6 @@ A powerful, modern Windows GUI for **dump2ufs**. This application simplifies con
 2. **Queue Games**: Drag and drop one or more PS5 game folders into the main window.
 3. **Configure Output**: (Optional) Set your preferred output directory.
 4. **Convert**: Click the "Convert" button. You can monitor progress and logs in the side panel.
-5. **Manage Tools**: Use the version display in the bottom-right to check for updates or revert versions.
 
 ## Building from Source
 

@@ -8,11 +8,6 @@ namespace Dump2UfsGui.Services
     public class SettingsData
     {
         public string? Ufs2ToolPath { get; set; }
-        public string? Ufs2ToolVersion { get; set; } // Current version in use
-        public string? Ufs2ToolIntegratedVersion { get; set; } = "3.0"; // Version of the bundled tool
-        public string? IgnoredUpdateVersion { get; set; } // Version the user declined or reverted from
-        public string? LatestKnownVersion { get; set; } // Latest version discovered from GitHub
-        public bool IsUpdateInstalled { get; set; }
         public string? LastInputDir { get; set; }
         public string? LastOutputDir { get; set; }
         public string OutputFormat { get; set; } = "ffpkg";
@@ -28,7 +23,6 @@ namespace Dump2UfsGui.Services
         private static readonly string SettingsFile = Path.Combine(AppDataDir, "settings.json");
 
         public static string InternalToolDir => Path.Combine(AppDataDir, "internal_tool", "v3.0");
-        public static string UpdatedToolDir => Path.Combine(AppDataDir, "updated_tool");
 
         public static SettingsData Load()
         {
@@ -56,23 +50,19 @@ namespace Dump2UfsGui.Services
         /// </summary>
         public static string? FindUfs2Tool(SettingsData settings)
         {
-            // 1. Updated tool location (search recursively)
-            var updatedPath = FindExecutablePath(UpdatedToolDir);
-            if (!string.IsNullOrEmpty(updatedPath)) return updatedPath;
-
-            // 2. Internal tool location (search recursively)
+            // 1. Internal tool location (search recursively)
             var internalPath = FindExecutablePath(InternalToolDir);
             if (!string.IsNullOrEmpty(internalPath)) return internalPath;
 
-            // 3. Saved custom path
+            // 2. Saved custom path
             if (!string.IsNullOrEmpty(settings.Ufs2ToolPath) && File.Exists(settings.Ufs2ToolPath))
                 return settings.Ufs2ToolPath;
 
-            // 4. Current directory
+            // 3. Current directory
             var currentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UFS2Tool.exe");
             if (File.Exists(currentDir)) return currentDir;
 
-            // 5. PATH
+            // 4. PATH
             var pathDirs = Environment.GetEnvironmentVariable("PATH")?.Split(';') ?? Array.Empty<string>();
             foreach (var dir in pathDirs)
             {

@@ -746,20 +746,6 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="TxtToolVersion" FontSize="10" Foreground="{StaticResource TextMutedBrush}" 
                                VerticalAlignment="Center" Text="UFS2Tool v3.0"/>
-                    <Button x:Name="BtnCheckUpdate" Style="{StaticResource SecondaryButton}" Margin="8,0,0,0"
-                            Padding="8,1" Click="BtnCheckUpdate_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock x:Name="TxtUpdateIcon" Text="🔄" FontSize="10" Margin="0,0,4,0"/>
-                            <TextBlock x:Name="TxtUpdate" Text="Update" FontSize="10"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="BtnUninstallUpdate" Style="{StaticResource SecondaryButton}" Margin="4,0,0,0"
-                            Padding="8,1" Click="BtnUninstallUpdate_Click" Visibility="Collapsed">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="🗑️" FontSize="10" Margin="0,0,4,0"/>
-                            <TextBlock Text="Revert to v3.0" FontSize="10"/>
-                        </StackPanel>
-                    </Button>
                 </StackPanel>
             </Grid>
         </Border>

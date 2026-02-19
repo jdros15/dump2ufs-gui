@@ -134,15 +134,6 @@ namespace Dump2UfsGui
             if (_ufs2ToolPath != null)
             {
                 OverlaySetup.Visibility = Visibility.Collapsed;
-                
-                // Sync IsUpdateInstalled flag with reality
-                bool isUsingUpdate = UpdateService.IsUsingUpdate();
-                if (_settings.IsUpdateInstalled != isUsingUpdate)
-                {
-                    _settings.IsUpdateInstalled = isUsingUpdate;
-                    SettingsManager.Save(_settings);
-                }
-
                 RefreshToolStatus();
             }
             else
@@ -175,16 +166,8 @@ namespace Dump2UfsGui
             CheckExperimentalFfpkg.IsChecked = _settings.EnableExperimentalFfpkg;
             CheckExperimentalFfpkg.Visibility = _settings.OutputFormat == "ffpkg" ? Visibility.Visible : Visibility.Collapsed;
 
-            // Discrete update check on launch (as soon as ready)
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(100);
-                await Dispatcher.InvokeAsync(() => 
-                {
-                    _ = CheckForUpdatesDiscreteAsync();
-                    UpdateQueueUI(); // Ensure button text and UI state match settings at launch
-                });
-            });
+            // Update UI
+            UpdateQueueUI();
         }
 
         // ═══════════════════════════════════════════
@@ -319,8 +302,6 @@ namespace Dump2UfsGui
             // Master enable/disable
             BtnConvert.IsEnabled = waitingCount > 0 && _ufs2ToolPath != null && !_isProcessingQueue;
             BtnBrowseOutput.IsEnabled = !_isProcessingQueue;
-            BtnCheckUpdate.IsEnabled = !_isProcessingQueue;
-            BtnUninstallUpdate.IsEnabled = !_isProcessingQueue;
             ComboFormat.IsEnabled = !_isProcessingQueue;
             CheckExperimentalFfpkg.IsEnabled = !_isProcessingQueue;
         }
@@ -1081,171 +1062,11 @@ namespace Dump2UfsGui
 
         private void RefreshToolStatus()
         {
-            bool isUpdate = UpdateService.IsUsingUpdate();
-            BtnUninstallUpdate.Visibility = isUpdate ? Visibility.Visible : Visibility.Collapsed;
-            
-            if (isUpdate)
-            {
-                TxtToolVersion.Text = $"UFS2Tool {_settings.Ufs2ToolVersion?.Replace("v", "") ?? "Updated"}";
-                TxtToolVersion.Foreground = FindResource("AccentPurpleBrush") as SolidColorBrush;
-            }
-            else
-            {
-                TxtToolVersion.Text = "UFS2Tool v3.0 (Integrated)";
-                TxtToolVersion.Foreground = FindResource("TextMutedBrush") as SolidColorBrush;
-            }
-
-            // Update the 'Update' button text if a new version is known
-            string currentVer = UpdateService.IsUsingUpdate() ? (_settings.Ufs2ToolVersion ?? "v3.0") : "v3.0";
-            if (!string.IsNullOrEmpty(_settings.LatestKnownVersion) && _settings.LatestKnownVersion != currentVer)
-            {
-                TxtUpdate.Text = $"Update to {_settings.LatestKnownVersion}";
-                TxtUpdateIcon.Text = "📥"; // Use a download icon for available update
-            }
-            else
-            {
-                TxtUpdate.Text = "Update";
-                TxtUpdateIcon.Text = "🔄";
-            }
+            TxtToolVersion.Text = "UFS2Tool v3.0";
+            TxtToolVersion.Foreground = FindResource("TextMutedBrush") as SolidColorBrush;
         }
 
-        private async void BtnCheckUpdate_Click(object sender, RoutedEventArgs e)
-        {
-            if (_isProcessingQueue) return;
-            await PerformUpdateCheckAsync(false);
-        }
 
-        private async Task CheckForUpdatesDiscreteAsync()
-        {
-            // Only check if we are not busy
-            if (_isProcessingQueue) return;
-            await PerformUpdateCheckAsync(true);
-        }
-
-        private async Task PerformUpdateCheckAsync(bool isDiscrete)
-        {
-            if (_isProcessingQueue) return;
-
-            if (!isDiscrete) BtnCheckUpdate.IsEnabled = false;
-            if (!isDiscrete) TxtStatus.Text = "Checking for UFS2Tool updates...";
-
-            try
-            {
-                string currentVer = UpdateService.IsUsingUpdate() ? (_settings.Ufs2ToolVersion ?? "v3.0") : "v3.0";
-                var (hasUpdate, newVersion, downloadUrl) = await UpdateService.CheckForUpdateAsync(currentVer);
-
-                if (hasUpdate)
-                {
-                    _settings.LatestKnownVersion = newVersion;
-                    SettingsManager.Save(_settings);
-                    RefreshToolStatus();
-
-                    // If discrete check, skip popup if already ignored
-                    if (isDiscrete && newVersion == _settings.IgnoredUpdateVersion) return;
-
-                    // If discrete check, only prompt if not currently busy
-                    if (isDiscrete && _isProcessingQueue) return;
-
-                    var result = MessageBox.Show(
-                        $"A new version of UFS2Tool is available: {newVersion}\n\n" +
-                        "Do you want to download and install it? " +
-                        "(You can always revert to v3.0 later if needed.)",
-                        "Update Available", MessageBoxButton.YesNo, MessageBoxImage.Information);
-
-                    if (result == MessageBoxResult.Yes)
-                    {
-                        // Check again if busy before starting download
-                        if (_isProcessingQueue)
-                        {
-                            MessageBox.Show("Conversion is now in progress. Update cancelled to avoid interference.", "Update Postponed", MessageBoxButton.OK, MessageBoxImage.Warning);
-                            return;
-                        }
-
-                        TxtStatus.Text = $"Downloading UFS2Tool {newVersion}...";
-                        
-                        var progress = new Progress<double>(p => {
-                            TxtStatus.Text = $"Downloading UFS2Tool {newVersion}... {p:P0}";
-                        });
-
-                        await UpdateService.DownloadAndInstallUpdateAsync(downloadUrl, progress);
-                        
-                        _settings.Ufs2ToolVersion = newVersion;
-                        _settings.IsUpdateInstalled = true;
-                        _settings.IgnoredUpdateVersion = null; // Reset ignore on successful update
-                        SettingsManager.Save(_settings);
-                        
-                        _ufs2ToolPath = UpdateService.GetEffectiveToolPath();
-                        RefreshToolStatus();
-                        TxtStatus.Text = $"Successfully updated to UFS2Tool {newVersion}";
-                    }
-                    else
-                    {
-                        // User said No, remember this version to skip the automatic popup next time
-                        _settings.IgnoredUpdateVersion = newVersion;
-                        SettingsManager.Save(_settings);
-                        if (!isDiscrete) TxtStatus.Text = "Update skipped.";
-                    }
-                }
-                else
-                {
-                    // No update found, clear latest known version if it matches current (to reset button text)
-                    if (_settings.LatestKnownVersion == currentVer)
-                    {
-                        _settings.LatestKnownVersion = null;
-                        SettingsManager.Save(_settings);
-                        RefreshToolStatus();
-                    }
-
-                    if (!isDiscrete)
-                    {
-                        MessageBox.Show("UFS2Tool is already up to date.", "No Updates", MessageBoxButton.OK, MessageBoxImage.Information);
-                        TxtStatus.Text = "UFS2Tool is up to date.";
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                if (!isDiscrete)
-                {
-                    MessageBox.Show($"Update check failed: {ex.Message}", "Update Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    TxtStatus.Text = "Update check failed.";
-                }
-            }
-            finally
-            {
-                if (!isDiscrete) BtnCheckUpdate.IsEnabled = true;
-            }
-        }
-
-        private void BtnUninstallUpdate_Click(object sender, RoutedEventArgs e)
-        {
-            var result = MessageBox.Show(
-                "Are you sure you want to uninstall the update and revert to the integrated UFS2Tool v3.0?",
-                "Revert Version", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Yes)
-            {
-                try
-                {
-                    // Mark the version we are reverting FROM as ignored, so we don't immediately prompt to re-install it
-                    _settings.IgnoredUpdateVersion = _settings.Ufs2ToolVersion;
-                    _settings.LatestKnownVersion = _settings.Ufs2ToolVersion; // Keep it as latest known so button shows it
-
-                    UpdateService.UninstallUpdate();
-                    _settings.Ufs2ToolVersion = "v3.0";
-                    _settings.IsUpdateInstalled = false;
-                    SettingsManager.Save(_settings);
-                    
-                    _ufs2ToolPath = UpdateService.GetEffectiveToolPath();
-                    RefreshToolStatus();
-                    TxtStatus.Text = "Reverted to integrated UFS2Tool v3.0";
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Failed to uninstall update: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-            }
-        }
 
         // ═══════════════════════════════════════════
         // COMPLETION OVERLAY

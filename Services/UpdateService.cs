@@ -2,27 +2,11 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Net.Http;
-using System.Net.Http.Json;
 using System.Reflection;
 using System.Threading.Tasks;
-using System.Collections.Generic;
 
 namespace Dump2UfsGui.Services
 {
-    public class GitHubRelease
-    {
-        public string tag_name { get; set; } = "";
-        public string name { get; set; } = "";
-        public List<GitHubAsset> assets { get; set; } = new();
-    }
-
-    public class GitHubAsset
-    {
-        public string name { get; set; } = "";
-        public string browser_download_url { get; set; } = "";
-    }
-
     public class UpdateService
     {
         private static readonly string AppDataDir = Path.Combine(
@@ -30,11 +14,7 @@ namespace Dump2UfsGui.Services
             "dump2ufs-gui");
 
         public static string InternalToolDir => Path.Combine(AppDataDir, "internal_tool", "v3.0");
-        public static string UpdatedToolDir => Path.Combine(AppDataDir, "updated_tool");
         
-        private const string RepoOwner = "SvenGDK";
-        private const string RepoName = "UFS2Tool";
-
         public static async Task InitializeAsync()
         {
             if (!VerifyIntegratedToolHealth())
@@ -93,14 +73,7 @@ namespace Dump2UfsGui.Services
 
         public static string GetEffectiveToolPath()
         {
-            // 1. Check updated tool (verify health)
-            var updatedPath = FindExecutablePath(UpdatedToolDir);
-            if (!string.IsNullOrEmpty(updatedPath) && VerifyUpdateHealth())
-            {
-                return updatedPath;
-            }
-
-            // 2. Check internal tool (verify health)
+            // Only use internal tool (verify health)
             var internalPath = FindExecutablePath(InternalToolDir);
             if (!string.IsNullOrEmpty(internalPath) && VerifyIntegratedToolHealth())
             {
@@ -108,31 +81,6 @@ namespace Dump2UfsGui.Services
             }
 
             return "";
-        }
-
-        public static bool VerifyUpdateHealth()
-        {
-            var exePath = FindExecutablePath(UpdatedToolDir);
-            if (string.IsNullOrEmpty(exePath)) return false;
-
-            var dir = Path.GetDirectoryName(exePath)!;
-
-            // Updated tool depends on common DLLs usually found in self-contained apps, 
-            // but we check for at least the core binaries.
-            string[] criticalFiles = {
-                "UFS2Tool.dll",
-                "UFS2Tool.runtimeconfig.json"
-            };
-
-            foreach (var file in criticalFiles)
-            {
-                if (!File.Exists(Path.Combine(dir, file)))
-                {
-                    return false;
-                }
-            }
-
-            return true;
         }
 
         private static string FindExecutablePath(string rootDir)
@@ -149,75 +97,5 @@ namespace Dump2UfsGui.Services
                 return "";
             }
         }
-
-        public static bool IsUsingUpdate()
-        {
-            return VerifyUpdateHealth();
-        }
-
-        public static async Task<(bool HasUpdate, string NewVersion, string DownloadUrl)> CheckForUpdateAsync(string currentVersion)
-        {
-            try
-            {
-                using var client = new HttpClient();
-                client.DefaultRequestHeaders.Add("User-Agent", "dump2ufs-gui-updater");
-                
-                var release = await client.GetFromJsonAsync<GitHubRelease>(
-                    $"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest");
-
-                if (release == null) return (false, "", "");
-
-                if (release.tag_name != currentVersion)
-                {
-                    var asset = release.assets.FirstOrDefault(a => a.name.Contains("win-x64") && a.name.EndsWith(".zip"));
-                    if (asset != null)
-                    {
-                        return (true, release.tag_name, asset.browser_download_url);
-                    }
-                }
-            }
-            catch { }
-            return (false, "", "");
-        }
-
-        public static async Task DownloadAndInstallUpdateAsync(string url, IProgress<double>? progress = null)
-        {
-            using var client = new HttpClient();
-            var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
-
-            var totalBytes = response.Content.Headers.ContentLength ?? -1L;
-            var canReportProgress = totalBytes != -1 && progress != null;
-
-            using var stream = await response.Content.ReadAsStreamAsync();
-            using var ms = new MemoryStream();
-            
-            var buffer = new byte[81920];
-            var totalRead = 0L;
-            int read;
-            while ((read = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-            {
-                await ms.WriteAsync(buffer, 0, read);
-                totalRead += read;
-                if (canReportProgress) progress!.Report((double)totalRead / totalBytes);
-            }
-
-            // Extract to updated tool dir
-            if (Directory.Exists(UpdatedToolDir))
-                Directory.Delete(UpdatedToolDir, true);
-            
-            Directory.CreateDirectory(UpdatedToolDir);
-            
-            ms.Position = 0;
-            using var archive = new ZipArchive(ms);
-            archive.ExtractToDirectory(UpdatedToolDir);
-        }
-
-        public static void UninstallUpdate()
-        {
-            if (Directory.Exists(UpdatedToolDir))
-                Directory.Delete(UpdatedToolDir, true);
-        }
-
     }
 }
