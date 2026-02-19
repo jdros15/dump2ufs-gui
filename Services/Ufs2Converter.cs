@@ -113,18 +113,19 @@ namespace Dump2UfsGui.Services
                     if (File.Exists(tempFile))
                         File.Delete(tempFile);
 
-                    var args = $"makefs -b 0 -o bsize={b},fsize={f},minfree=0,version=2,optimization=space -s {b} \"{tempFile}\" \"{inputPath}\"";
-                    var output = await RunUfs2ToolAsync(args, cancellationToken);
-                    
-                    ReportProgress("Optimizing", $"Finished testing block size {b}...", endPercent);
+                    var args = $"newfs -N -D \"{inputPath}\" -b {b} -f {f} -O 2 -m 0 -o space \"{tempFile}\"";
+            var output = await RunUfs2ToolAsync(args, cancellationToken);
 
-                    // Try to parse image size from output
-                    // UFS2Tool format variations: 
-                    // 1. "Image size (6 833 565 696 bytes)"
-                    // 2. "... size of 6833565696 ..."
-                    // 3. "image size 6833565696 too large" (when using -s)
-                    
-                    var sizeMatch = Regex.Match(output, @"(?:Image size \(|size of |image size )([\d\s\u00A0,.]+)", RegexOptions.IgnoreCase);
+            ReportProgress("Optimizing", $"Finished testing block size {b}...", endPercent);
+
+            // Try to parse image size from output
+            // UFS2Tool format variations:
+            // 1. "Image size (6 833 565 696 bytes)"
+            // 2. "... size of 6833565696 ..."
+            // 3. "image size 6833565696 too large" (when using -s)
+            // 4. "Total size: 16,613,376 bytes" (newfs -N mode)
+
+            var sizeMatch = Regex.Match(output, @"(?:Image size \(|size of |image size |Total size:\s+)([\d\s\u00A0,.]+)", RegexOptions.IgnoreCase);
                     bool parsed = false;
 
                     if (sizeMatch.Success)
@@ -199,11 +200,10 @@ namespace Dump2UfsGui.Services
 
                 ReportProgress("Creating", $"Building UFS2 image ({FormatSize(bestResult.ImageSize)})...", 60);
 
-                var labelOpt = !string.IsNullOrEmpty(label) ? $",label={label}" : "";
-                var makefsOptions = $"bsize={bestResult.BlockSize},fsize={bestResult.FragmentSize},minfree=0,version=2,optimization=space{labelOpt}";
-                var makefsArgs = $"makefs -b 0 -o {makefsOptions} \"{outputPath}\" \"{inputPath}\"";
+                var labelOpt = !string.IsNullOrEmpty(label) ? $"-L \"{label}\"" : "";
+                var newfsArgs = $"newfs -D \"{inputPath}\" -b {bestResult.BlockSize} -f {bestResult.FragmentSize} -O 2 -m 0 -o space {labelOpt} \"{outputPath}\"";
 
-                Log($"Running: UFS2Tool.exe {makefsArgs}");
+                Log($"Running: UFS2Tool.exe {newfsArgs}");
                 Log("");
 
                 // Safety check: UFS2Tool will try to read the output file if it's inside the input directory
@@ -214,7 +214,7 @@ namespace Dump2UfsGui.Services
                     throw new Exception("The output file is located inside the input directory. This causes UFS2Tool to collide with itself as it tries to add the output file to the image while writing to it.");
                 }
 
-                var makefsOutput = await RunUfs2ToolWithProgressAsync(makefsArgs, cancellationToken);
+                var makefsOutput = await RunUfs2ToolWithProgressAsync(newfsArgs, cancellationToken);
 
                 // Verify output
                 if (File.Exists(outputPath))
@@ -226,7 +226,7 @@ namespace Dump2UfsGui.Services
                     ReportProgress("Complete", $"Successfully created {FormatSize(fi.Length)} image!", 100);
                     Log("");
                     Log($"   File size: {FormatSize(fi.Length)}");
-                    
+
                     if (enableCompatibility && outputPath.EndsWith(".ffpkg", StringComparison.OrdinalIgnoreCase))
                     {
                         ReportProgress("Finalizing", "Applying EchoStretch compatibility trailer...", 98);

@@ -134,6 +134,7 @@ namespace Dump2UfsGui
             if (_ufs2ToolPath != null)
             {
                 OverlaySetup.Visibility = Visibility.Collapsed;
+                TxtStatus.Text = "Ready — drag PS5 game dump folders to add to queue";
                 RefreshToolStatus();
             }
             else
@@ -1062,7 +1063,7 @@ namespace Dump2UfsGui
 
         private void RefreshToolStatus()
         {
-            TxtToolVersion.Text = "UFS2Tool v3.0";
+            TxtToolVersion.Text = "UFS2Tool v4.0";
             TxtToolVersion.Foreground = FindResource("TextMutedBrush") as SolidColorBrush;
         }
 

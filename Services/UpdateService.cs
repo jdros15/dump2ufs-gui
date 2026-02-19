@@ -13,7 +13,7 @@ namespace Dump2UfsGui.Services
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "dump2ufs-gui");
 
-        public static string InternalToolDir => Path.Combine(AppDataDir, "internal_tool", "v3.0");
+        public static string InternalToolDir => Path.Combine(AppDataDir, "internal_tool", "v4.0");
         
         public static async Task InitializeAsync()
         {
@@ -56,7 +56,7 @@ namespace Dump2UfsGui.Services
             await Task.Run(() =>
             {
                 var assembly = Assembly.GetExecutingAssembly();
-                var resourceName = "Dump2UfsGui.ufs2tool_v3.zip";
+                var resourceName = "Dump2UfsGui.ufs2tool_v4.zip";
 
                 using Stream? stream = assembly.GetManifestResourceStream(resourceName);
                 if (stream == null) throw new Exception($"Resource {resourceName} not found.");

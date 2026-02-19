@@ -745,7 +745,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="TxtToolVersion" FontSize="10" Foreground="{StaticResource TextMutedBrush}" 
-                               VerticalAlignment="Center" Text="UFS2Tool v3.0"/>
+                               VerticalAlignment="Center" Text="UFS2Tool v4.0"/>
                 </StackPanel>
             </Grid>
         </Border>

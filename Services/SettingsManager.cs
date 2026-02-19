@@ -22,7 +22,7 @@ namespace Dump2UfsGui.Services
 
         private static readonly string SettingsFile = Path.Combine(AppDataDir, "settings.json");
 
-        public static string InternalToolDir => Path.Combine(AppDataDir, "internal_tool", "v3.0");
+        public static string InternalToolDir => Path.Combine(AppDataDir, "internal_tool", "v4.0");
 
         public static SettingsData Load()
         {

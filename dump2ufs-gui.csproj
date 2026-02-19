@@ -19,7 +19,7 @@
 
   <ItemGroup>
     <Resource Include="ico.png" />
-    <EmbeddedResource Include="ufs2tool_v3.zip" />
+    <EmbeddedResource Include="ufs2tool_v4.zip" />
   </ItemGroup>
 
 </Project>
