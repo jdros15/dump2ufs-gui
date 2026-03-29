@@ -12,6 +12,7 @@ A powerful, modern Windows GUI for **dump2ufs**. This application simplifies con
 - **Auto-Detection**: Automatically parses game metadata (Title Name, Title ID, Version) to generate optimized labels and filenames.
 - **Optimization**: Efficiently calculates the best block sizes to produce the smallest possible images.
 - **Optimized Output**: Generates space-efficient Fake FPKG (`.ffpkg`) images.
+- **exFAT Image Support**: Create raw `.exfat` disk images directly from game dumps.
 - **Dump Installer Compatibility**: Optional one-click wrapping for EchoStretch's [Dump Installer](https://github.com/EchoStretch/dump_installer), including automated `sce_sys` metadata injection.
 
 > ⚠️ **Prerequisite**: This tool requires extracted (foldered) PS5 game dumps. Compressed archives (`.rar`, `.zip`, `.7z`, etc.) are **not** supported — please extract your dump first.
@@ -43,6 +44,16 @@ The standalone executable will be generated at:
 The "Dump Installer Compatible" toggle prepares your `.ffpkg` files specifically for use with EchoStretch's [Dump Installer](https://github.com/EchoStretch/dump_installer). This feature automatically bundles the required `sce_sys` metadata into a compatibility trailer at the end of the file.
 
 **Setup**: To use this feature effectively, you must configure your PS5 environment according to the instructions provided in the [Dump Installer repository](https://github.com/EchoStretch/dump_installer).
+
+## 💽 exFAT Image Support
+
+The `.exfat` output option allows you to create raw disk images that can be mounted on your PS5.
+
+**Requirements**:
+- **Creation**: To generate `.exfat` images, you must have [OSFMount](https://www.osforensics.com/tools/mount-disk-images.html) installed on your Windows PC.
+- **Mounting on PS5**: To mount these images on your console, you will need a tool such as [ShadowMountPlus](https://github.com/drakmor/ShadowMountPlus).
+
+The application will automatically detect your OSFMount installation and provide an "Elevated" conversion process (UAC) to handle the mounting and formatting required for image creation.
 
 ## Credits
 
