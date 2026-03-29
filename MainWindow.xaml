@@ -55,7 +55,7 @@
                         <StackPanel VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="dump2ufs" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
-                                <TextBlock Text="v1.3.4" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentPurpleBrush}" 
+                                <TextBlock Text="v1.4.0" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentPurpleBrush}" 
                                            VerticalAlignment="Bottom" Margin="6,0,0,2" Opacity="0.8"/>
                             </StackPanel>
                             <TextBlock Text="PS5 Game Dump Converter" FontSize="10" 
@@ -592,12 +592,12 @@
                         Margin="0,0,8,0">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Format:" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"
-                                   Foreground="{StaticResource TextSecondaryBrush}" Visibility="Collapsed"/>
-                        <ComboBox x:Name="ComboFormat" Width="140" Height="28" VerticalContentAlignment="Center"
-                                  SelectionChanged="ComboFormat_SelectionChanged" Margin="0,0,20,0"
-                                  SelectedIndex="0" Visibility="Collapsed">
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <ComboBox x:Name="ComboFormat" Width="160" Height="28" VerticalContentAlignment="Center"
+                                  SelectionChanged="ComboFormat_SelectionChanged" Margin="0,0,16,0"
+                                  SelectedIndex="0">
                             <ComboBoxItem Content="Fake FPKG (.ffpkg)" Tag="ffpkg"/>
-                            <ComboBoxItem Content="PFS Image (.pfs)" Tag="pfs"/>
+                            <ComboBoxItem Content="exFAT Image (.exfat)" Tag="exfat"/>
                         </ComboBox>
 
                         <CheckBox x:Name="CheckExperimentalFfpkg" Style="{StaticResource ToggleSwitchStyle}"
@@ -613,6 +613,25 @@
                                 <Run Text="compatible" Foreground="{StaticResource TextSecondaryBrush}"/>
                             </TextBlock>
                         </CheckBox>
+
+                        <!-- OSFMount status (shown when exfat is selected) -->
+                        <StackPanel x:Name="PanelOsfStatus" Orientation="Horizontal" VerticalAlignment="Center"
+                                    Margin="8,0,0,0" Visibility="Collapsed">
+                            <TextBlock x:Name="TxtOsfStatusIcon" Text="✅" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock x:Name="TxtOsfStatusText" Text="OSFMount ready" FontSize="11" VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextMutedBrush}"/>
+                            <Button x:Name="BtnGetOsfMount" Content="Get OSFMount" FontSize="10" Padding="8,2"
+                                    Click="BtnGetOsfMount_Click" Margin="8,0,0,0" Visibility="Collapsed"
+                                    ToolTip="Download OSFMount from the official website">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+                                        <Setter Property="FontSize" Value="10"/>
+                                        <Setter Property="BorderBrush" Value="#40F0883E"/>
+                                        <Setter Property="Foreground" Value="{StaticResource AccentOrangeBrush}"/>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

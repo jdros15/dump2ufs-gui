@@ -1,0 +1,277 @@
+# ShadowMountPlus (PS5)
+
+**Version:** `1.6beta5`
+
+**Repository:** https://github.com/drakmor/shadowMountPlus
+
+**Warning! Mounting images can cause shutdown problems and data corruption on internal drives! This depends on many factors, but is more common with older firmware versions. Please take this into account when testing.**
+
+
+**ShadowMountPlus** is a fully automated, background "Auto-Mounter" payload for Jailbroken PlayStation 5 consoles. It streamlines the game mounting process by eliminating the need for manual configuration or external tools (such as DumpRunner or Itemzflow). ShadowMountPlus automatically detects, mounts, and installs game dumps from both **internal and external storage**.
+
+
+**Compatibility:** Supports all Jailbroken PS5 firmwares running **Kstuff v1.6.6+ (Recommended 1.6.6)** or **Kstuff-lite v1.0+**.
+
+
+## Current image support
+
+`PFS support is experimental.`
+
+| Extension | Mounted FS | Attach backend | Status |
+| --- | --- | --- | --- |
+| `.ffpkg` | `ufs` | `LVD` or `MD` (configurable) | Recommended |
+| `.exfat` | `exfatfs` | `LVD` or `MD` (configurable) | Compatibility / external-drive-only titles |
+| `.ffpfs` | `pfs` | `LVD` | Experimental |
+
+Notes:
+- Backend, read-only mode, and sector size can be configured via `/data/shadowmount/config.ini`.
+- Debug logging is enabled by default (`debug=1`) and writes to console plus `/data/shadowmount/debug.log` (set `debug=0` to disable).
+- **UFS (`.ffpkg`) is the recommended image format for normal use.**
+- **Use exFAT (`.exfat`) only for titles that need external-drive-style compatibility.**
+- **When building exFAT images manually, keep the cluster size at `64 KB`; smaller clusters can reduce performance.**
+
+## Recommended FS choice
+
+- Prefer **UFS (`.ffpkg`)** in most cases: this is the recommended default image format for ShadowMountPlus.
+- Use **exFAT (`.exfat`)** only for games that do not work correctly unless they are handled like external-drive content.
+- If you create an **exFAT (`.exfat`)** image manually, use a **`64 KB` cluster size**. Smaller clusters can cause a noticeable performance loss.
+
+## Runtime config (`/data/shadowmount/config.ini`)
+
+This file is optional. If it does not exist, built-in defaults are used.
+
+Supported keys (all optional):
+- `debug=1|0` (`1` enables `log_debug` output to console + `/data/shadowmount/debug.log`; default is `1`)
+- `quiet_mode=1|0` (`1` suppresses plain informational popups but keeps rich toasts; default is `0`)
+- `mount_read_only=1|0` (default: `1`)
+- `force_mount=1|0` (mounting even damaged file systems; default: `0`)
+- `image_ro=<image_filename>` (repeatable; force read-only mode for this image filename)
+- `image_rw=<image_filename>` (repeatable; force read-write mode for this image filename)
+- `recursive_scan=1|0` (`0` = scan only first-level subfolders, `1` = recursive scan without depth limit; default: `0`)
+- `scan_interval_seconds=<1..3600>` (full scan loop interval; default: `10`)
+- `stability_wait_seconds=<0..3600>` (minimum source age before processing; default: `10`)
+- `exfat_backend=lvd|md` (default: `lvd`)
+- `ufs_backend=lvd|md` (default: `lvd`)
+- `backport_fakelib=1|0` (`1` mounts sandbox `fakelib` overlays for running games; default: `1`)
+- `kstuff_game_auto_toggle=1|0` (`1` pauses kstuff after tracked game launches and resumes it on stop; default: `1`)
+- `kstuff_pause_delay_image_seconds=<0..3600>` (delay before pausing kstuff for image-backed launches; default: `20`)
+- `kstuff_pause_delay_direct_seconds=<0..3600>` (delay before pausing kstuff for direct/non-image launches; default: `10`)
+- `kstuff_no_pause=<TITLE_ID>` (repeatable; keeps kstuff enabled for matching titles)
+- `kstuff_delay=<TITLE_ID>:<0..3600>` (repeatable; per-title pause delay override, last matching rule wins)
+- `scanpath=<absolute_path>` (can be repeated on multiple lines; default: built-in scan path list below)
+- `lvd_exfat_sector_size=<value>` (default: `512`)
+- `lvd_ufs_sector_size=<value>` (default: `4096`)
+- `lvd_pfs_sector_size=<value>` (default: `32768`)
+- `md_exfat_sector_size=<value>` (default: `512`)
+- `md_ufs_sector_size=<value>` (default: `512`)
+
+Per-image mode override behavior:
+- Match is done by image file name (without path).
+- File names with spaces are supported.
+- If multiple rules target the same file name, the last one in config wins.
+- If no rule matches, global `mount_read_only` is used.
+- Example:
+```ini
+mount_read_only=1
+image_rw=PPSA1234-my-image.ffpfs
+image_rw=MYGame 123.exfat
+image_ro=legacy_dump.ffpkg
+```
+
+Scan path behavior:
+- If at least one `scanpath=...` is present, only those custom paths are used.
+- `/mnt/shadowmnt` is always added automatically, even with custom paths.
+- With `recursive_scan=0` (default), only first-level subfolders are checked.
+- With `recursive_scan=1`, subfolders are scanned recursively.
+- Full scan loop runs every `scan_interval_seconds` (default: `10`).
+- Sources newer than `stability_wait_seconds` are deferred until stable (default: `10`).
+
+Backport overlay behavior:
+- For each `scanpath`, use:
+  - `<scanpath>/backports/<TITLE_ID>/`
+- The `backports` folder is ignored during normal game scanning.
+- A backport is applied automatically to the matching mounted game from the same scan path.
+- If `/mnt/sandbox/<TITLE_ID>_XXX/app0/fakelib` exists while the game is running, ShadowMount+ also mounts it into that game's sandbox `common/lib`.
+- `backport_fakelib=0` disables the sandbox `fakelib` watcher.
+- For `backport_fakelib` to work correctly, the standalone `BackPork` payload must be disabled. Running both at the same time will conflict.
+
+Kstuff game lifecycle behavior:
+- When `kstuff_game_auto_toggle=1`, ShadowMount watches game `exec/exit` events in the background.
+- Image-backed launches use `kstuff_pause_delay_image_seconds`; direct/non-image launches use `kstuff_pause_delay_direct_seconds`.
+- `kstuff_no_pause` skips auto-pause entirely for matching title IDs.
+- `kstuff_delay` overrides the pause delay for matching title IDs, regardless of image/direct launch type.
+- If both kinds of rule target the same title, `kstuff_no_pause` takes priority.
+- When the last tracked game stops, ShadowMount immediately enables kstuff again if it was the component that disabled it.
+
+
+Validation:
+- See `config.ini.example` for a ready-to-use template.
+
+## Mount point naming
+
+Image mountpoints are created under:
+
+`/mnt/shadowmnt/<image_name>_<hash>`
+
+Image layout requirement (`.ffpkg`, `.exfat`, `.ffpfs`):
+- Game files must be placed at the image root.
+- Do not add an extra top-level folder inside the image.
+- Valid example: `/sce_sys/param.json` exists directly from image root.
+- Invalid example: `/GAME_FOLDER/sce_sys/param.json` (extra nesting level).
+
+## Scan paths
+
+Default scan locations:
+- `/data/homebrew`
+- `/data/etaHEN/games`
+- `/mnt/ext0/homebrew`
+- `/mnt/ext0/etaHEN/games`
+- `/mnt/ext1/homebrew`
+- `/mnt/ext1/etaHEN/games`
+- `/mnt/usb0/homebrew` .. `/mnt/usb7/homebrew`
+- `/mnt/usb0/etaHEN/games` .. `/mnt/usb7/etaHEN/games`
+- `/mnt/usb0` .. `/mnt/usb7`
+- `/mnt/ext0`
+- `/mnt/ext1`
+- `/mnt/shadowmnt` (mounted image content scan)
+
+You can override scan roots with `scanpath=...` entries in `/data/shadowmount/config.ini`.
+
+Recommended folder structure:
+- Default mode (`recursive_scan=0`):
+  - `/data/homebrew/<TITLE_ID>/`
+  - `/data/etaHEN/games/<TITLE_ID>/`
+  - `/data/homebrew/backports/<TITLE_ID>/`
+  - `/data/etaHEN/games/backports/<TITLE_ID>/`
+   
+- Recursive mode (`recursive_scan=1`):
+  - `/data/homebrew/PS5/<AnyFolder>/<TITLE_ID>/`
+  - `/mnt/ext0/etaHEN/games/<Collection>/<TITLE_ID>/`
+  - `/mnt/ext0/etaHEN/games/backports/<TITLE_ID>/`
+
+
+## Creating an exFAT image
+
+Recommended only for titles that need external-drive-style compatibility. For general use, prefer `.ffpkg`.
+
+Linux (Ubuntu/Debian):
+- Required components installation:
+  - `sudo apt-get update && sudo apt-get install -y exfatprogs exfat-fuse fuse3 rsync`
+- Script: `mkexfat.sh`
+- Usage: `./mkexfat.sh <game_root_dir> [output_file]`
+- Example:
+  - `chmod +x mkexfat.sh`
+  - `./mkexfat.sh ./APPXXXX ./PPSA12345.exfat`
+- Notes:
+  - Source folder must be the game root and contain `eboot.bin`.
+  - Auto-calculates image size using rounded file allocation + metadata + safety margin.
+  - For manual exFAT builds, keep the cluster size at `64 KB` or you may lose performance.
+  - Automatically selects exFAT cluster profile:
+  - Large-file profile: `64K`
+  - Small/mixed-file profile: `32K`
+
+Windows:
+- Recommended: use `make_image.bat` (wrapper for `New-OsfExfatImage.ps1` + OSFMount).
+- Requirements:
+  - Install OSFMount: https://www.osforensics.com/tools/mount-disk-images.html.
+  - Keep `make_image.bat` and `New-OsfExfatImage.ps1` in the same folder.
+  - Run `cmd.exe` as Administrator.
+  - If you build an exFAT image manually instead of using the script, keep the cluster size at `64 KB` or you may lose performance.
+- Usage:
+  - `make_image.bat "C:\images\game.exfat" "C:\payload\APPXXXX"`
+- Behavior:
+  - Auto-sizes the image to fit source content.
+  - Source folder must be the game root and contain `eboot.bin`.
+  - Formats and copies source folder contents into image root.
+- Optional (fixed size): run PowerShell script directly:
+  - `powershell.exe -ExecutionPolicy Bypass -File .\New-OsfExfatImage.ps1 -ImagePath "C:\images\game.exfat" -SourceDir "C:\payload\APPXXXX" -Size 8G -ForceOverwrite`
+
+## Creating a UFS2 image (`.ffpkg`)
+
+FreeBSD:
+- Script: `mkufs2.sh`
+- Usage: `./mkufs2.sh <game_root_dir> [output_file]`
+- Example:
+  - `chmod +x mkufs2.sh`
+  - `./mkufs2.sh ./APPXXXX ./PPSA12345.ffpkg`
+- Notes:
+  - Source folder must be the game root and contain `eboot.bin`.
+  - The script auto-calculates image size using rounded file allocation + metadata + safety margin.
+  - Recommended `newfs` parameters for UFS2:
+  - `newfs -O 2 -b 65536 -f 65536 -m 0 -S 4096`
+  - `mkufs2.sh` keeps this fixed block/fragment/sector profile and auto-tunes `-i` based on source file/directory count.
+  - Rough manual `-i` estimate for manual builds:
+  - `target_inodes ~= file_count + dir_count + 2048`
+  - `bytes_per_inode ~= image_size_bytes / target_inodes`
+  - Round `bytes_per_inode` down to a multiple of `4096`, then keep it in the practical range `65536..262144`.
+  - Practical rule of thumb: use `262144` for normal game dumps, `131072` for tens of thousands of files, and `65536` only for very file-dense images.
+  - Example: for an `8 GiB` image with `60000` files and `4000` directories, `-i ~= 8*1024^3 / (60000 + 4000 + 2048) ~= 130312`, so use `-i 131072`.
+
+Windows:
+- You can create UFS2 images with **UFS2Tool** https://github.com/SvenGDK/UFS2Tool.
+- Example:
+  - `UFS2Tool.exe newfs -O 2 -b 65536 -f 65536 -m 0 -S 4096 -i 262144 -D ./APPXXXX ./PPSA12345.ffpkg`
+  - For manual builds, use `-i 262144` as the baseline and lower it for images with many small files.
+
+
+## Installation and usage
+
+
+### Method 1: Manual Payload Injection (Port 9021)
+Use a payload sender (such as NetCat GUI or a web-based loader) to send the files to **Port 9021**.
+
+1.  Send `shadowmountplus.elf`.
+2.  Wait for the notification: *"ShadowMount+"*.
+
+### Method 2: PLK Autoloader (Recommended)
+Add ShadowMountPlus to your `autoload.txt` for **plk-autoloader** to ensure it starts automatically on every boot.
+
+**Sample Configuration:**
+```ini
+shadowmountplus.elf
+!3000
+kstuff.elf
+```
+
+---
+
+## Troubleshooting
+
+If a game is not mounted:
+- Debug log is enabled by default; if disabled, set `debug=1` in `/data/shadowmount/config.ini`.
+- Check `/data/shadowmount/debug.log` and system notifications from ShadowMount+.
+- Verify scan roots:
+  - if `scanpath=...` is set, only these paths are scanned;
+  - `/mnt/shadowmnt` is always scanned.
+- Verify scan depth:
+  - `recursive_scan=0` scans only first-level subfolders;
+  - `recursive_scan=1` scans recursively.
+- If logs show `source not stable yet`, adjust `stability_wait_seconds` (or wait for source copy/write to finish).
+- Verify game structure:
+  - folder game: `<GAME_DIR>/sce_sys/param.json`;
+  - image game (`.ffpkg` / `.exfat` / `.ffpfs`): `sce_sys/param.json` must be at image root (no extra top-level folder).
+- If you see `missing/invalid param.json` for an image, check via FTP that files are present under `/mnt/shadowmnt/<image_name>_<hash>/` and include `sce_sys/param.json`.
+- If you see image mount failure, check image integrity and filesystem type (`.ffpkg`=UFS, `.exfat`=exFAT, `.ffpfs`=PFS).
+- If you see duplicate titleId notification, keep only one source per `<TITLE_ID>`.
+
+If a game is mounted but does not start:
+- Check registration notifications (`Register failed ...`).
+- If the game is not registered, try removing its launcher icon and removing it from Itemzflow.
+- If this does not help, remove the game data from system settings and retry (this will delete game saves).
+
+## ⚠️ Notes
+* **First Run:** If you have a large library, the initial scan may take a few seconds to register all titles.
+* **Large Games:** For massive games (100GB+), allow a few extra seconds for the system to verify file integrity before the "Installed" notification appears.
+
+## Credits
+* **Drakmor** - Evolution of ShadowMount to ShadowMountPlus
+
+* **Special Thanks:**
+    * VoidWhisper for ShadowMount
+    * BestPig for BackPort
+    * EchoStretch for kstuff-toggle and etc
+    * Gezine
+    * earthonion
+    * LightningMods
+    * john-tornblom for SDK
+    * PS5 R&D Community

@@ -145,11 +145,6 @@ namespace Dump2UfsGui
                 PanelSetup.Visibility = Visibility.Visible;
             }
 
-            // FOR FUTURE CONTEXT: The format selector is currently hidden in MainWindow.xaml
-            // and we are forcing ffpkg for this build. To re-enable the format selector,
-            // set Visibility back to Visible in MainWindow.xaml and remove the force below.
-            _settings.OutputFormat = "ffpkg"; 
-
             // Initialize format combo
             if (ComboFormat != null)
             {
@@ -166,6 +161,9 @@ namespace Dump2UfsGui
             // Initialize experimental ffpkg checkbox
             CheckExperimentalFfpkg.IsChecked = _settings.EnableExperimentalFfpkg;
             CheckExperimentalFfpkg.Visibility = _settings.OutputFormat == "ffpkg" ? Visibility.Visible : Visibility.Collapsed;
+
+            // Update OSFMount status if exfat is selected
+            UpdateOsfMountStatus();
 
             // Update UI
             UpdateQueueUI();
@@ -205,10 +203,14 @@ namespace Dump2UfsGui
                 // Determine effective output directory
                 // If it's the first item, we use the parent of the input folder
                 // If the box is already filled, we strictly use that
-                string outputDir;
+                string outputDir = "";
                 if (string.IsNullOrWhiteSpace(TxtOutputDir.Text))
                 {
-                    outputDir = Path.GetDirectoryName(folderPath) ?? folderPath;
+                    // Logic: Anchor to the parent of the input folder
+                    // If the parent is just another JDownloader level, we still use it.
+                    var parentDir = Path.GetDirectoryName(folderPath);
+                    outputDir = parentDir ?? folderPath; // Fallback to itself only if at root
+                    
                     TxtOutputDir.Text = outputDir;
                     AppendLog($"ℹ️ Output directory anchored to: {outputDir}");
                 }
@@ -230,12 +232,23 @@ namespace Dump2UfsGui
                     }
                 }
 
-                var extension = _settings.OutputFormat == "pfs" ? ".pfs" : ".ffpkg";
-                var suggestedName = _settings.OutputFormat == "pfs" 
-                    ? Path.GetFileName(folderPath) + ".pfs" 
+                var extension = GetFormatExtension(_settings.OutputFormat);
+                var suggestedName = _settings.OutputFormat == "exfat" 
+                    ? gameInfo.TitleId + ".exfat" 
                     : gameInfo.SuggestedOutputName;
 
                 var outputPath = Path.Combine(outputDir, suggestedName);
+
+                // Conflict check when adding (using robust directory-bound check)
+                var fullInBase = folderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                if (outputPath.StartsWith(fullInBase, StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show(
+                        $"⚠️ CONFLICT DETECTED\n\n" +
+                        $"The output file would be created INSIDE the game folder:\n{outputPath}\n\n" +
+                        $"This is not allowed. Please change the output directory to a DIFFERENT folder using the 'Browse' button.",
+                        "Path Conflict", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
 
                 var item = new QueueItem
                 {
@@ -265,6 +278,7 @@ namespace Dump2UfsGui
             BtnConvert.Visibility = _isProcessingQueue ? Visibility.Collapsed : Visibility.Visible;
             IconStatusBusy.Visibility = _isProcessingQueue ? Visibility.Visible : Visibility.Collapsed;
             CheckExperimentalFfpkg.Visibility = _settings?.OutputFormat == "ffpkg" ? Visibility.Visible : Visibility.Collapsed;
+            PanelOsfStatus.Visibility = _settings?.OutputFormat == "exfat" ? Visibility.Visible : Visibility.Collapsed;
 
             // Handle Cancelling state
             if (_isCancelling)
@@ -289,7 +303,7 @@ namespace Dump2UfsGui
             else if (totalCount > 0)
             {
                 TxtQueueCount.Text = $"({totalCount} game{(totalCount == 1 ? "" : "s")})";
-                var formatExt = (_settings?.OutputFormat ?? "ffpkg") == "pfs" ? ".pfs" : ".ffpkg";
+                var formatExt = GetFormatExtension(_settings?.OutputFormat ?? "ffpkg");
                 TxtConvertButton.Text = waitingCount > 1
                     ? $"Convert {waitingCount} Games to {formatExt}"
                     : $"Convert to {formatExt}";
@@ -297,7 +311,7 @@ namespace Dump2UfsGui
             else
             {
                 TxtQueueCount.Text = "";
-                TxtConvertButton.Text = $"Convert to .{_settings?.OutputFormat ?? "ffpkg"}";
+                TxtConvertButton.Text = $"Convert to {GetFormatExtension(_settings?.OutputFormat ?? "ffpkg")}";
             }
 
             // Master enable/disable
@@ -552,7 +566,7 @@ namespace Dump2UfsGui
         {
             var dialog = new Microsoft.Win32.OpenFolderDialog
             {
-                Title = "Select Output Directory for .ffpkg Files"
+                Title = $"Select Output Directory for {GetFormatExtension(_settings.OutputFormat)} Files"
             };
 
             if (!string.IsNullOrEmpty(TxtOutputDir.Text) && Directory.Exists(TxtOutputDir.Text))
@@ -566,12 +580,10 @@ namespace Dump2UfsGui
                 _settings.LastOutputDir = dialog.FolderName;
 
                 // Update output paths for all waiting items
-                var extension = _settings.OutputFormat == "pfs" ? ".pfs" : ".ffpkg";
+                var extension = GetFormatExtension(_settings.OutputFormat);
                 foreach (var item in _queue.Where(q => q.Status == QueueItemStatus.Waiting))
                 {
-                    var baseName = _settings.OutputFormat == "pfs" 
-                        ? Path.GetFileName(item.InputPath) 
-                        : item.GameInfo.TitleId;
+                    var baseName = item.GameInfo.TitleId;
                     item.OutputPath = Path.Combine(dialog.FolderName, baseName + extension);
                 }
             }
@@ -588,20 +600,19 @@ namespace Dump2UfsGui
                     SettingsManager.Save(_settings);
 
                     // Update output paths for all waiting items in queue
-                    var extension = format == "pfs" ? ".pfs" : ".ffpkg";
+                    var extension = GetFormatExtension(format);
                     var outputDir = TxtOutputDir.Text;
                     if (!string.IsNullOrWhiteSpace(outputDir))
                     {
                         foreach (var item in _queue.Where(q => q.Status == QueueItemStatus.Waiting))
                         {
-                            var baseName = format == "pfs" 
-                                ? Path.GetFileName(item.InputPath) 
-                                : item.GameInfo.TitleId;
+                            var baseName = item.GameInfo.TitleId;
                             item.OutputPath = Path.Combine(outputDir, baseName + extension);
                         }
                     }
 
                     CheckExperimentalFfpkg.Visibility = format == "ffpkg" ? Visibility.Visible : Visibility.Collapsed;
+                    UpdateOsfMountStatus();
                     UpdateQueueUI();
                 }
             }
@@ -635,7 +646,34 @@ namespace Dump2UfsGui
 
         private async void BtnConvert_Click(object sender, RoutedEventArgs e)
         {
-            if (_isProcessingQueue || _ufs2ToolPath == null) return;
+            // For exfat mode, we don't need UFS2Tool but we need OSFMount
+            if (_settings.OutputFormat == "exfat")
+            {
+                if (_isProcessingQueue) return;
+
+                if (!ExfatConverter.IsOsfMountInstalled())
+                {
+                    MessageBox.Show(
+                        "OSFMount is required for exFAT image creation but it's not installed.\n\n" +
+                        "Please use the 'Get OSFMount' button in the status bar to download and install it, then restart the application to detect your OSFMount installation.",
+                        "OSFMount Not Found", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                if (!ExfatConverter.IsRunningAsAdmin())
+                {
+                    var result = MessageBox.Show(
+                        "exFAT image creation requires Administrator privileges for OSFMount.\n\n" +
+                        "The application will attempt to run the necessary operations with elevated privileges.\n" +
+                        "You may see a UAC prompt during the process.\n\nContinue?",
+                        "Administrator Required", MessageBoxButton.YesNo, MessageBoxImage.Information);
+                    if (result != MessageBoxResult.Yes) return;
+                }
+            }
+            else
+            {
+                if (_isProcessingQueue || _ufs2ToolPath == null) return;
+            }
 
             // Set flag and update UI immediately to prevent re-entrancy
             _isProcessingQueue = true;
@@ -674,12 +712,10 @@ namespace Dump2UfsGui
             }
 
             // Update output paths to use current output dir
-            var extension = _settings.OutputFormat == "pfs" ? ".pfs" : ".ffpkg";
+            var extension = GetFormatExtension(_settings.OutputFormat);
             foreach (var item in waitingItems)
             {
-                var baseName = _settings.OutputFormat == "pfs" 
-                    ? Path.GetFileName(item.InputPath) 
-                    : item.GameInfo.TitleId;
+                var baseName = item.GameInfo.TitleId;
                 item.OutputPath = Path.Combine(outputDir, baseName + extension);
             }
 
@@ -717,14 +753,14 @@ namespace Dump2UfsGui
                     if (_cts.Token.IsCancellationRequested) break;
 
                     // Update output path in case output dir changed
-                    var nextExt = _settings.OutputFormat == "pfs" ? ".pfs" : ".ffpkg";
-                    var baseName = _settings.OutputFormat == "pfs" 
-                        ? Path.GetFileName(nextItem.InputPath) 
-                        : nextItem.GameInfo.TitleId;
+                    var nextExt = GetFormatExtension(_settings.OutputFormat);
+                    var baseName = nextItem.GameInfo.TitleId;
                     nextItem.OutputPath = Path.Combine(TxtOutputDir.Text, baseName + nextExt);
 
-                    // Safety check: Is output inside input?
-                    if (Path.GetFullPath(nextItem.OutputPath).StartsWith(Path.GetFullPath(nextItem.InputPath), StringComparison.OrdinalIgnoreCase))
+                    // Safety check: Is output INSIDE input? 
+                    // To be safe, we check if OutputPath starts with (InputPath + slash)
+                    var fullInStrict = nextItem.InputPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    if (Path.GetFullPath(nextItem.OutputPath).StartsWith(fullInStrict, StringComparison.OrdinalIgnoreCase))
                     {
                         nextItem.Status = QueueItemStatus.Error;
                         nextItem.StatusText = "❌ Output path cannot be inside the input folder";
@@ -758,29 +794,58 @@ namespace Dump2UfsGui
 
                     try
                     {
-                        var converter = new Ufs2Converter(_ufs2ToolPath);
+                        ConversionResult convResult;
 
-                        converter.OnProgress += p =>
+                        if (_settings.OutputFormat == "exfat")
                         {
-                            Dispatcher.Invoke(() =>
+                            var exfatConverter = new ExfatConverter();
+
+                            exfatConverter.OnProgress += p =>
                             {
-                                nextItem.Progress = p.PercentComplete;
-                                nextItem.StatusText = $"{p.Stage}: {p.Detail}";
-                            });
-                        };
+                                Dispatcher.Invoke(() =>
+                                {
+                                    nextItem.Progress = p.PercentComplete;
+                                    nextItem.StatusText = $"{p.Stage}: {p.Detail}";
+                                });
+                            };
 
-                        converter.OnLog += msg =>
+                            exfatConverter.OnLog += msg =>
+                            {
+                                Dispatcher.Invoke(() => AppendLog(msg));
+                            };
+
+                            convResult = await exfatConverter.ConvertAsync(
+                                nextItem.InputPath,
+                                nextItem.OutputPath,
+                                nextItem.GameInfo.AutoLabel,
+                                _cts.Token);
+                        }
+                        else
                         {
-                            Dispatcher.Invoke(() => AppendLog(msg));
-                        };
+                            var converter = new Ufs2Converter(_ufs2ToolPath!);
 
-                        var convResult = await converter.ConvertAsync(
-                            nextItem.InputPath,
-                            nextItem.OutputPath,
-                            nextItem.GameInfo.AutoLabel,
-                            nextItem.GameInfo.TitleId,
-                            _settings.EnableExperimentalFfpkg,
-                            _cts.Token);
+                            converter.OnProgress += p =>
+                            {
+                                Dispatcher.Invoke(() =>
+                                {
+                                    nextItem.Progress = p.PercentComplete;
+                                    nextItem.StatusText = $"{p.Stage}: {p.Detail}";
+                                });
+                            };
+
+                            converter.OnLog += msg =>
+                            {
+                                Dispatcher.Invoke(() => AppendLog(msg));
+                            };
+
+                            convResult = await converter.ConvertAsync(
+                                nextItem.InputPath,
+                                nextItem.OutputPath,
+                                nextItem.GameInfo.AutoLabel,
+                                nextItem.GameInfo.TitleId,
+                                _settings.EnableExperimentalFfpkg,
+                                _cts.Token);
+                        }
 
                         ctsTime.Cancel();
                         await timeTask;
@@ -1065,6 +1130,61 @@ namespace Dump2UfsGui
         {
             TxtToolVersion.Text = "UFS2Tool v4.0";
             TxtToolVersion.Foreground = FindResource("TextMutedBrush") as SolidColorBrush;
+        }
+
+        // ═══════════════════════════════════════════
+        // OSFMount STATUS & HELPERS
+        // ═══════════════════════════════════════════
+
+        private void UpdateOsfMountStatus()
+        {
+            if (_settings?.OutputFormat != "exfat")
+            {
+                PanelOsfStatus.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            PanelOsfStatus.Visibility = Visibility.Visible;
+
+            if (ExfatConverter.IsOsfMountInstalled())
+            {
+                TxtOsfStatusIcon.Text = "✅";
+                TxtOsfStatusText.Text = "OSFMount ready";
+                TxtOsfStatusText.Foreground = FindResource("AccentGreenBrush") as SolidColorBrush;
+                BtnGetOsfMount.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                TxtOsfStatusIcon.Text = "⚠️";
+                TxtOsfStatusText.Text = "OSFMount not found";
+                TxtOsfStatusText.Foreground = FindResource("AccentOrangeBrush") as SolidColorBrush;
+                BtnGetOsfMount.Visibility = Visibility.Visible;
+            }
+        }
+
+        private void BtnGetOsfMount_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "https://www.osforensics.com/tools/mount-disk-images.html",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not open browser: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private static string GetFormatExtension(string format)
+        {
+            return format switch
+            {
+                "exfat" => ".exfat",
+                _ => ".ffpkg"
+            };
         }
 
 
